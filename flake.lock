@@ -2532,6 +2532,23 @@
         "type": "github"
       }
     },
+    "cardanoHaskellPackageRepo": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1662014187,
+        "narHash": "sha256-bnLSEQBOJv3jGmtm0wF6EDhiaieydThXwwTvdmkrISA=",
+        "owner": "input-output-hk",
+        "repo": "cardano-haskell-package-repo",
+        "rev": "f3174c23d1ab6549d383508f17eb1c4cfdd05111",
+        "type": "github"
+      },
+      "original": {
+        "owner": "input-output-hk",
+        "ref": "repo",
+        "repo": "cardano-haskell-package-repo",
+        "type": "github"
+      }
+    },
     "customConfig": {
       "locked": {
         "lastModified": 1630400035,
@@ -10069,6 +10086,7 @@
       "inputs": {
         "cardano-mainnet-mirror": "cardano-mainnet-mirror",
         "cardano-node-workbench": "cardano-node-workbench",
+        "cardanoHaskellPackageRepo": "cardanoHaskellPackageRepo",
         "customConfig": "customConfig_2",
         "flake-compat": "flake-compat_2",
         "hackageNix": "hackageNix",
