@@ -2535,11 +2535,11 @@
     "cardanoHaskellPackageRepo": {
       "flake": false,
       "locked": {
-        "lastModified": 1662014187,
-        "narHash": "sha256-bnLSEQBOJv3jGmtm0wF6EDhiaieydThXwwTvdmkrISA=",
+        "lastModified": 1662032924,
+        "narHash": "sha256-EPPoXSpNjUSWZGDGi78k7yKi8vx3pay/7a7NRMpfqRE=",
         "owner": "input-output-hk",
         "repo": "cardano-haskell-package-repo",
-        "rev": "f3174c23d1ab6549d383508f17eb1c4cfdd05111",
+        "rev": "d3aaed5fedc48ead7e606e2ccd0a3895c7bb6c7a",
         "type": "github"
       },
       "original": {
