@@ -127,9 +127,5 @@ in project.shellFor {
       cluster.workbench.workbench
     ];
 
-  # Prevents cabal from choosing alternate plans, so that
-  # *all* dependencies are provided by Nix.
-  exactDeps = true;
-
 } // { inherit shellHook;
      }

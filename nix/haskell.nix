@@ -55,10 +55,6 @@ haskell-nix.cabalProject' ({ pkgs
       cabal
     ];
 
-    # Prevents cabal from choosing alternate plans, so that
-    # *all* dependencies are provided by Nix.
-    exactDeps = true;
-
     withHoogle = true;
   };
   modules =
