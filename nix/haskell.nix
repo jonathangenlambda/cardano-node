@@ -45,8 +45,6 @@ haskell-nix.cabalProject' ({ pkgs
   shell = {
     name = "cabal-dev-shell";
 
-    packages = lib.attrVals projectPackageNames;
-
     # These programs will be available inside the nix-shell.
     nativeBuildInputs = with pkgs.buildPackages.buildPackages; [
       nix-prefetch-git

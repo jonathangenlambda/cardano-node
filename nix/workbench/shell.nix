@@ -78,8 +78,6 @@ in project.shellFor {
 
   inherit withHoogle;
 
-  packages = ps: builtins.attrValues (haskellLib.selectProjectPackages ps);
-
   tools = {
     haskell-language-server = {
       version = "latest";
