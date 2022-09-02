@@ -1,4 +1,4 @@
--- Internal repository for cardano haskell packages, see CONTRIBUTING for more
+-- Custom repository for cardano haskell packages, see CONTRIBUTING for more
 repository cardano-haskell-package-repo
   url: https://input-output-hk.github.io/cardano-haskell-package-repo
   secure: True
