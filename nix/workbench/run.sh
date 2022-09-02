@@ -703,14 +703,8 @@ run_aws_get() {
 }
 
 node_cabal_source_at() {
-    local node=$1
-    local pin=$2
-
-    git show $node:cabal.project |
-        grep "location: .*/$pin\$" -A1 |
-        tail -n1 |
-        cut -d: -f2 |
-        cut -c 2-
+    # FIXME
+    echo 0123456789ABCDEF0123456789ABCDEF01234567
 }
 
 legacy_run_manifest() {
@@ -723,12 +717,12 @@ legacy_run_manifest() {
       --arg Node          $node
       --arg NodeBranch    $node_branch
       --arg NodeApproxVer $node_ver
-      --arg Network  $(node_cabal_source_at $node ouroboros-network)
-      --arg Ledger   $(node_cabal_source_at $node cardano-ledger)
-      --arg Plutus   $(node_cabal_source_at $node plutus)
-      --arg Crypto   $(node_cabal_source_at $node cardano-crypto)
-      --arg Base     $(node_cabal_source_at $node cardano-base)
-      --arg Prelude  $(node_cabal_source_at $node cardano-prelude)
+      --arg Network       $(node_cabal_source_at $node ouroboros-network)
+      --arg Ledger        $(node_cabal_source_at $node cardano-ledger)
+      --arg Plutus        $(node_cabal_source_at $node plutus)
+      --arg Crypto        $(node_cabal_source_at $node cardano-crypto)
+      --arg Base          $(node_cabal_source_at $node cardano-base)
+      --arg Prelude       $(node_cabal_source_at $node cardano-prelude)
     )
     jq '
   { "cardano-node"         : $Node
