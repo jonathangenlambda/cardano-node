@@ -36,4 +36,4 @@ See the README for instructions.
 ### ... to the Cardano package repository
 
 When releasing a new version of the node, it and the other packages in this repository should be released to the [Cardano package repository](https://github.com/input-output-hk/cardano-haskell-package-repo).
-See the README for instructions, including a script to automate most of the process.
+See the README for instructions, including a script to automate most of the process. Please note that libraries need bounds on the version of their dependencies to avoid bitrot and be effectively reusable.
