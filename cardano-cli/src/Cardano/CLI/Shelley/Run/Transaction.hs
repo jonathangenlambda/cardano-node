@@ -42,6 +42,7 @@ import qualified Cardano.Binary as CBOR
 --TODO: following import needed for orphan Eq Script instance
 import           Cardano.Ledger.Shelley.Scripts ()
 
+import           Cardano.CLI.Helpers (printWarning)
 import           Cardano.CLI.Run.Friendly (friendlyTxBS, friendlyTxBodyBS)
 import           Cardano.CLI.Shelley.Key (InputDecodeError, readSigningKeyFileAnyOf)
 import           Cardano.CLI.Shelley.Output
@@ -457,6 +458,10 @@ runTxBuild (AnyCardanoEra era) (AnyConsensusModeParams cModeParams) networkId mS
            inputsAndScriptFiles readOnlyRefIns txinsc mReturnCollateral mTotCollateral txouts (TxOutChangeAddress changeAddr) mValue mLowerBound mUpperBound
            certFiles withdrawals reqSigners metadataSchema scriptFiles metadataFiles mpparams
            mUpdatePropFile outputFormat mOverrideWits outputOptions = do
+
+  liftIO $ forM_ mpparams $ \_ ->
+    printWarning "'--protocol-params-file' for 'transaction build' is deprecated"
+
   let consensusMode = consensusModeOnly cModeParams
       dummyFee = Just $ Lovelace 0
       inputsThatRequireWitnessing = [input | (input,_) <- inputsAndScriptFiles]
@@ -474,7 +479,6 @@ runTxBuild (AnyCardanoEra era) (AnyConsensusModeParams cModeParams) networkId mS
   validatedTxMetadata <- validateTxMetadataInEra era metadataSchema metadataFiles
   validatedTxAuxScripts <- validateTxAuxScripts era scriptFiles
   validatedReqSigners <- validateRequiredSigners era reqSigners
-  validatedPParams <- validateProtocolParameters era mpparams
   validatedTxWtdrwls <- validateTxWithdrawals era withdrawals
   validatedTxCerts <- validateTxCertificates era certFiles
   validatedTxUpProp <- validateTxUpdateProposal era mUpdatePropFile
@@ -483,24 +487,7 @@ runTxBuild (AnyCardanoEra era) (AnyConsensusModeParams cModeParams) networkId mS
 
   case (consensusMode, cardanoEraStyle era) of
     (CardanoMode, ShelleyBasedEra _sbe) -> do
-      let txBodyContent = TxBodyContent
-                            (validateTxIns inputsAndMaybeScriptWits)
-                            validatedCollateralTxIns
-                            validatedRefInputs
-                            validatedTxOuts
-                            validatedTotCollateral
-                            validatedRetCol
-                            dFee
-                            validatedBounds
-                            validatedTxMetadata
-                            validatedTxAuxScripts
-                            validatedReqSigners
-                            validatedPParams
-                            validatedTxWtdrwls
-                            validatedTxCerts
-                            validatedTxUpProp
-                            validatedMintValue
-                            validatedTxScriptValidity
+
       eInMode <- case toEraInMode era CardanoMode of
                    Just result -> return result
                    Nothing ->
@@ -517,6 +504,25 @@ runTxBuild (AnyCardanoEra era) (AnyConsensusModeParams cModeParams) networkId mS
         . hoistEither $ txInsExistInUTxO allTxInputs utxo
       firstExceptT ShelleyTxCmdQueryNotScriptLocked
         . hoistEither $ notScriptLockedTxIns txinsc utxo
+
+      let txBodyContent = TxBodyContent
+                          (validateTxIns inputsAndMaybeScriptWits)
+                          validatedCollateralTxIns
+                          validatedRefInputs
+                          validatedTxOuts
+                          validatedTotCollateral
+                          validatedRetCol
+                          dFee
+                          validatedBounds
+                          validatedTxMetadata
+                          validatedTxAuxScripts
+                          validatedReqSigners
+                          (BuildTxWith $ Just pparams)
+                          validatedTxWtdrwls
+                          validatedTxCerts
+                          validatedTxUpProp
+                          validatedMintValue
+                          validatedTxScriptValidity
 
       let cAddr = case anyAddressInEra era changeAddr of
                     Just addr -> addr
