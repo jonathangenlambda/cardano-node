@@ -18,8 +18,8 @@
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.hackage.follows = "hackageNix";
     };
-    cardanoHaskellPackageRepo = {
-      url = "github:input-output-hk/cardano-haskell-package-repo?ref=repo";
+    cardanoHaskellPackages = {
+      url = "github:input-output-hk/cardano-haskell-packages?ref=repo";
       flake = false;
     };
     utils.url = "github:numtide/flake-utils";
@@ -71,7 +71,7 @@
     , hostNixpkgs
     , utils
     , haskellNix
-    , cardanoHaskellPackageRepo
+    , cardanoHaskellPackages
     , iohkNix
     , plutus-apps
     , cardano-mainnet-mirror
@@ -208,7 +208,7 @@
             inherit (pkgs) haskell-nix gitrev;
             inherit projectPackagesExes;
             inputMap = {
-              "https://input-output-hk.github.io/cardano-haskell-package-repo" = cardanoHaskellPackageRepo;
+              "https://input-output-hk.github.io/cardano-haskell-packages" = cardanoHaskellPackages;
             };
           }).appendModule customConfig.haskellNix // {
             profiled = profiledProject;
