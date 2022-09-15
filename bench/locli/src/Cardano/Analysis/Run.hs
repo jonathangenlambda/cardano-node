@@ -13,6 +13,7 @@ import qualified Data.Text as T
 
 import           Cardano.Analysis.ChainFilter
 import           Cardano.Analysis.Context
+import           Cardano.Analysis.Domain
 import           Cardano.Analysis.Ground
 import           Cardano.Analysis.Version
 import           Cardano.Util
@@ -33,7 +34,7 @@ tagsAnchor aRuns aFilters =
   Anchor { aVersion = getVersion, .. }
 
 renderAnchor :: Anchor -> Text
-renderAnchor Anchor{..} = mconcat
+renderAnchor a@Anchor{..} = mconcat
   [ "runs: ",    T.intercalate ", " aRuns, ", "
   , "filters: ", case aFilters of
                    [] -> "unfiltered"

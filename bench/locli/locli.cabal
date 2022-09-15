@@ -63,6 +63,7 @@ library
                        Cardano.Analysis.Chain
                        Cardano.Analysis.ChainFilter
                        Cardano.Analysis.Context
+                       Cardano.Analysis.Domain
                        Cardano.Analysis.Ground
                        Cardano.Analysis.MachPerf
                        Cardano.Analysis.Version

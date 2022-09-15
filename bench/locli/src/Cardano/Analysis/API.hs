@@ -20,6 +20,7 @@ import Text.Printf              (PrintfArg)
 import Cardano.Analysis.Chain
 import Cardano.Analysis.ChainFilter
 import Cardano.Analysis.Context
+import Cardano.Analysis.Domain
 import Cardano.Analysis.Ground
 import Cardano.Analysis.Version
 import Cardano.Logging.Resources.Types
@@ -142,19 +143,6 @@ data BPErrorKind
   | BPENegativePhase         !Phase !NominalDiffTime
   | BPEFork                  !Hash
   deriving (FromJSON, Generic, NFData, Show, ToJSON)
-
-data DataDomain a
-  = DataDomain
-    { ddRawFirst      :: !a
-    , ddRawLast       :: !a
-    , ddFilteredFirst :: !a
-    , ddFilteredLast  :: !a
-    , ddRawCount      :: Int
-    , ddFilteredCount :: Int
-    }
-  deriving (Generic, Show, ToJSON, FromJSON)
-  deriving anyclass NFData
--- Perhaps:  Plutus.V1.Ledger.Slot.SlotRange = Interval Slot
 
 mkDataDomainInj :: a -> a -> (a -> Int) -> DataDomain a
 mkDataDomainInj f l measure = DataDomain f l f l delta delta
