@@ -88,7 +88,7 @@ in project.shellFor {
   # These programs will be available inside the nix-shell.
   nativeBuildInputs = with pkgs; with haskellPackages; with cardanoNodePackages; [
     cardano-ping
-    cabal
+    cabalWrapped
     db-analyser
     ghcid
     haskellBuildUtils
