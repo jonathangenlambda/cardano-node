@@ -77,6 +77,10 @@ span[data-tooltip] {
   margin: 30px 0;
 }
 
+.table tbody tr:first-child td {
+  padding-top: 17px;
+}
+
 .rt-view-show-hide-chart-group {
   margin-top: 5px;
 }
@@ -91,6 +95,10 @@ span[data-tooltip] {
   max-width: 800px !important;
   margin-top: 50px;
   font-size: 97%;
+}
+
+.rt-view-logs-live-view-copies {
+  width: 40px;
 }
 
 .rt-view-chart-area {
@@ -195,10 +203,6 @@ span[data-tooltip] {
 
 .rt-view-logs-input {
   max-width: 200px;
-}
-
-.rt-view-error-msg-input {
-  max-width: 380px;
 }
 
 .rt-view-logs-live-view-node {

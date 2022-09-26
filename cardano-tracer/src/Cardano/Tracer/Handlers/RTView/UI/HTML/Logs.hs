@@ -48,6 +48,9 @@ mkLogsLiveView = do
                               , UI.th #+
                                   [ string "Message"
                                   ]
+                              , UI.th #. "rt-view-logs-live-view-copies" #+
+                                  [ UI.span # set html "&nbsp;"
+                                  ]
                               ]
                           ]
                       , UI.mkElement "tbody" ## "node-logs-live-view-tbody"
