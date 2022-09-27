@@ -1036,7 +1036,7 @@ makeTransactionBodyAutoBalance eraInMode systemstart history pparams
         }
     txbody3 <-
       first TxBodyError $ -- TODO: impossible to fail now
-        makeTransactionBody finalTxBodyContent
+        createAndValidateTransactionBody finalTxBodyContent
     return (BalancedTxBody finalTxBodyContent txbody3 (TxOut changeaddr balance TxOutDatumNone ReferenceScriptNone) fee)
  where
    -- Essentially we check for the existence of collateral inputs. If they exist we
