@@ -62,7 +62,7 @@ But it also means that if you need a package version that was released *after* t
 Because of how we use Nix to manage our Haskell build, whenever you do this you will also need to pull in the Nix equivalent of the newer ``index-state``. 
 You can do this by running ``nix flake lock --update-input hackageNix``.
 
-... from the Cardano pacakge repository
+... from the Cardano package repository
 ----
 
 Many Cardano packages are not on Hackage and are instead in the `Cardano package repository <https://github.com/input-output-hk/cardano-haskell-packages>`__, see the README for more information. 
