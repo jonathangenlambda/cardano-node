@@ -9,11 +9,18 @@ import           Control.Monad (void)
 import qualified Graphics.UI.Threepenny as UI
 import           Graphics.UI.Threepenny.Core
 
+import           Cardano.Tracer.Handlers.RTView.UI.Img.Icons
 import           Cardano.Tracer.Handlers.RTView.UI.Utils
 
 mkLogsLiveView :: UI Element
 mkLogsLiveView = do
   closeIt <- UI.button #. "delete"
+
+  searchMessagesInput <- UI.input #. "input rt-view-search-messages"
+                                  # set UI.type_ "text"
+                                  # set (UI.attr "placeholder") "Search log items"
+  searchMessages <- UI.button #. "button is-info"
+                              #+ [image "rt-view-search-logs-icon" searchSVG]
 
   logsLiveViewTable <-
     UI.div ## "logs-live-view-modal-window" #. "modal" # set dataState "closed" #+
@@ -60,7 +67,65 @@ mkLogsLiveView = do
                   ]
               ]
           , UI.mkElement "footer" #. "modal-card-foot rt-view-logs-live-view-foot" #+
-              [ 
+              [ UI.div #. "columns" #+
+                  [ UI.div #. "column" #+
+                      [ UI.div #. "field has-addons" #+
+                          [ UI.p #. "control" #+
+                              [ UI.div #. "dropdown is-hoverable" #+
+                                  [ UI.anchor #. "navbar-link" #+ [element notificationsIcon]
+                                  , UI.div #. "navbar-dropdown is-right" #+
+                                      [ element notificationsEventsItem
+                                      , element notificationsSettingsItem
+                                      ]
+                                  ]
+
+
+
+
+
+                                <div class="dropdown is-hoverable">
+                                  <div class="dropdown-trigger">
+                                    <button class="button" aria-haspopup="true" aria-controls="dropdown-menu4">
+                                      <span>Hover me</span>
+                                      <span class="icon is-small">
+                                        <i class="fas fa-angle-down" aria-hidden="true"></i>
+                                      </span>
+                                    </button>
+                                  </div>
+                                  <div class="dropdown-menu" id="dropdown-menu4" role="menu">
+                                    <div class="dropdown-content">
+                                      <div class="dropdown-item">
+                                        <p>You can insert <strong>any type of content</strong> within the dropdown menu.</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+                              ]
+                          , UI.p #. "control" #+
+                              [ element searchMessagesInput
+                              ]
+                          , UI.p #. "control" #+
+                              [ element searchMessages
+                              ]
+                          ]
+                      ]
+                  --, UI.div #. "column has-text-right" #+
+                  --    [ element exportToJSON
+                  --    ]
+                  ]
               ]
           ]
       ]

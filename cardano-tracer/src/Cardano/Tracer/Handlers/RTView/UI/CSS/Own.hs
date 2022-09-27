@@ -237,11 +237,11 @@ span[data-tooltip] {
   margin-top: 6px;
 }
 
-.rt-view-search-errors-icon {
+.rt-view-search-logs-icon {
   margin-top: 6px;
 }
 
-.rt-view-search-errors-icon svg {
+.rt-view-search-logs-icon svg {
   width: 18px;
   color: whitesmoke;
 }
