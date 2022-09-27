@@ -67,7 +67,7 @@ You can do this by running ``nix flake lock --update-input hackageNix``.
 
 Many Cardano packages are not on Hackage and are instead in the `Cardano package repository <https://github.com/input-output-hk/cardano-haskell-packages>`__, see the README for more information. 
 Getting new packages from there works much like getting them from Hackage. 
-The differences are that it has an independent ``index-state``, and that there is a different Nix command you need to run afterwards: ``nix flake lock --update-input cardanoHaskellPackages``.
+The differences are that it has an independent ``index-state``, and that there is a different Nix command you need to run afterwards: ``nix flake lock --update-input CHaP``.
 
 Patching dependencies
 ~~~~

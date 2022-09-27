@@ -2532,7 +2532,7 @@
         "type": "github"
       }
     },
-    "cardanoHaskellPackages": {
+    "CHaP": {
       "flake": false,
       "locked": {
         "lastModified": 1663153559,
@@ -10086,7 +10086,7 @@
       "inputs": {
         "cardano-mainnet-mirror": "cardano-mainnet-mirror",
         "cardano-node-workbench": "cardano-node-workbench",
-        "cardanoHaskellPackages": "cardanoHaskellPackages",
+        "CHaP": "CHaP",
         "customConfig": "customConfig_2",
         "flake-compat": "flake-compat_2",
         "hackageNix": "hackageNix",
