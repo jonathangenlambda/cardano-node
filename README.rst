@@ -424,3 +424,10 @@ The API documentation is published `here <https://input-output-hk.github.io/card
 The documentation is built with each push, but is only published from ``master`` branch.  In order to
 test if the documentation is working, build the documentation locally with ``./scripts/haddocs.sh`` and
 open ``haddocks/index.html`` in the browser.
+
+****
+Using the ``cardano-node`` Haskell packages
+****
+
+If you want to use the ``cardano-node`` Haskell packages from another project, you should use `CHaP <https://github.com/input-output-hk/cardano-haskell-packages>`_ to get the packages defined in this repository.
+Please note that you may need to use any ``source-repository-package`` stanzas defined in ``cabal.project``, although we will endeavour to keep these to an absolute minimum.
