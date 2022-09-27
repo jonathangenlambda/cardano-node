@@ -454,7 +454,7 @@ Without further ado (**NOTE**: *the order of steps is important!*):
 2. Check out the repository with the dependencies, *beside* the ``cardano-node`` checkout.  You have to check out the git revision of the dependency used by your ``cardano-node`` checkout -- as listed in ``cardano-node/cabal.project``.
     - we'll assume the ``ouroboros-network`` repository
     - ..so a certain parent directory will include checkouts of both ``ouroboros-network`` and ``cardano-node``, at the same level
-    - ..and the git revision checked out in ``ouroboros-network`` will match the corresponding ``source-repository-package`` clause in ``cardano-node/cabal.project``.
+    - ..and the git revision checked out in ``ouroboros-network`` will match the version of the ``ouroboros-network`` packages used currently 
     - Extra point #1:  you can localise/check out several dependency repositories
     - Extra point #2:  for the dependencies that are not listed in ``cabal.project`` of the node -- how do you determine the version to check out?  You can ask the workbench shell:
          1. Temporarily enter the workbench shell
