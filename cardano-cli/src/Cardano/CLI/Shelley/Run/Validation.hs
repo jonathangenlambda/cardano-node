@@ -33,6 +33,11 @@ module Cardano.CLI.Shelley.Run.Validation
   , readProtocolParameters
   , readProtocolParametersSourceSpec
 
+  -- * Tx
+  , readFileTx
+  , readFileTxBody
+
+  -- * Misc
   , renderEra
   ) where
 
@@ -389,6 +394,91 @@ readProtocolParameters (ProtocolParamsFile fpath) = do
   pparams <- handleIOExceptT (ProtocolParamsErrorFile . FileIOError fpath) $ LBS.readFile fpath
   firstExceptT (ProtocolParamsErrorJSON fpath . Text.pack) . hoistEither $
     Aeson.eitherDecode' pparams
+
+-- Tx & TxBody
+
+
+readFileTx :: FilePath -> IO (Either (FileError TextEnvelopeError) (InAnyCardanoEra Tx))
+readFileTx fp =
+  handleLeftT
+    (\e -> unCddlTx <$> acceptTxCDDLSerialisation e)
+    (readFileInAnyCardanoEra AsTx fp)
+
+
+-- IncompleteCddlFormattedTx is an CDDL formatted tx or partial tx
+-- (respectively needs additional witnesses or totally unwitnessed)
+-- while UnwitnessedCliFormattedTxBody is CLI formatted TxBody and
+-- needs to be key witnessed.
+
+data IncompleteTx
+  = UnwitnessedCliFormattedTxBody (InAnyCardanoEra TxBody)
+  | IncompleteCddlFormattedTx (InAnyCardanoEra Tx)
+
+readFileTxBody :: FilePath -> IO (Either (FileError TextEnvelopeError) IncompleteTx)
+readFileTxBody fp =
+  handleLeftT
+    (\e -> IncompleteCddlFormattedTx . unCddlTx <$> acceptTxCDDLSerialisation e)
+    (UnwitnessedCliFormattedTxBody <$> readFileInAnyCardanoEra AsTxBody fp)
+
+-- Misc
+readFileInAnyCardanoEra
+  :: ( HasTextEnvelope (thing ByronEra)
+     , HasTextEnvelope (thing ShelleyEra)
+     , HasTextEnvelope (thing AllegraEra)
+     , HasTextEnvelope (thing MaryEra)
+     , HasTextEnvelope (thing AlonzoEra)
+     , HasTextEnvelope (thing BabbageEra)
+     )
+  => (forall era. AsType era -> AsType (thing era))
+  -> FilePath
+  -> IO (Either (FileError TextEnvelopeError) (InAnyCardanoEra thing))
+readFileInAnyCardanoEra asThing =
+ readFileTextEnvelopeAnyOf
+   [ FromSomeType (asThing AsByronEra)   (InAnyCardanoEra ByronEra)
+   , FromSomeType (asThing AsShelleyEra) (InAnyCardanoEra ShelleyEra)
+   , FromSomeType (asThing AsAllegraEra) (InAnyCardanoEra AllegraEra)
+   , FromSomeType (asThing AsMaryEra)    (InAnyCardanoEra MaryEra)
+   , FromSomeType (asThing AsAlonzoEra)  (InAnyCardanoEra AlonzoEra)
+   , FromSomeType (asThing AsBabbageEra) (InAnyCardanoEra BabbageEra)
+   ]
+
+data CddlError = CddlErrorTextEnvCddl
+                   !(FileError TextEnvelopeError)
+                   !(FileError TextEnvelopeCddlError)
+
+acceptTxCDDLSerialisation
+  :: FileError TextEnvelopeError
+  -> ExceptT CddlError IO CddlTx
+acceptTxCDDLSerialisation err =
+  case err of
+   e@(FileError fp (TextEnvelopeDecodeError _)) ->
+      firstExceptT (CddlErrorTextEnvCddl e)
+                          $ newExceptT $ readFileTextEnvelopeCddlAnyOf teTypes fp
+
+
+   e@(FileError fp (TextEnvelopeAesonDecodeError _)) ->
+      firstExceptT (CddlErrorTextEnvCddl e)
+                     $ newExceptT $ readFileTextEnvelopeCddlAnyOf teTypes fp
+   e@(FileError fp (TextEnvelopeTypeError _ _)) ->
+      firstExceptT (CddlErrorTextEnvCddl e)
+                     $ newExceptT $ readFileTextEnvelopeCddlAnyOf teTypes fp
+   e@FileErrorTempFile -> error ""
+   FileIOError _ _ -> error ""
+ where
+  teTypes = [ FromCDDLTx "Witnessed Tx ByronEra" CddlTx
+            , FromCDDLTx "Witnessed Tx ShelleyEra" CddlTx
+            , FromCDDLTx "Witnessed Tx AllegraEra" CddlTx
+            , FromCDDLTx "Witnessed Tx MaryEra" CddlTx
+            , FromCDDLTx "Witnessed Tx AlonzoEra" CddlTx
+            , FromCDDLTx "Witnessed Tx BabbageEra" CddlTx
+            , FromCDDLTx "Unwitnessed Tx ByronEra" CddlTx
+            , FromCDDLTx "Unwitnessed Tx ShelleyEra" CddlTx
+            , FromCDDLTx "Unwitnessed Tx AllegraEra" CddlTx
+            , FromCDDLTx "Unwitnessed Tx MaryEra" CddlTx
+            , FromCDDLTx "Unwitnessed Tx AlonzoEra" CddlTx
+            , FromCDDLTx "Unwitnessed Tx BabbageEra" CddlTx
+            ]
+
 
 
 -- TODO: Move me

@@ -1622,16 +1622,6 @@ readFileWitness fp =
     (\e -> unCddlWitness <$> acceptKeyWitnessCDDLSerialisation e)
     (readFileInAnyCardanoEra AsKeyWitness fp)
 
--- IncompleteCddlFormattedTx is an CDDL formatted tx or partial tx
--- (respectively needs additional witnesses or totally unwitnessed)
--- while UnwitnessedCliFormattedTxBody is CLI formatted TxBody and
--- needs to be key witnessed.
-
-data IncompleteTx
-  = UnwitnessedCliFormattedTxBody (InAnyCardanoEra TxBody)
-  | IncompleteCddlFormattedTx (InAnyCardanoEra Tx)
-
-
 readCddlTx :: FilePath -> IO (Either (FileError TextEnvelopeCddlError) CddlTx)
 readCddlTx = readFileTextEnvelopeCddlAnyOf teTypes
  where
@@ -1649,75 +1639,6 @@ readCddlTx = readFileTextEnvelopeCddlAnyOf teTypes
               , FromCDDLTx "Unwitnessed Tx BabbageEra" CddlTx
               ]
 
-readFileTxBody :: FilePath -> ExceptT ShelleyTxCmdError IO IncompleteTx
-readFileTxBody fp =
-  handleLeftT
-    (\e -> IncompleteCddlFormattedTx . unCddlTx <$> acceptTxCDDLSerialisation e)
-    (UnwitnessedCliFormattedTxBody <$> readFileInAnyCardanoEra AsTxBody fp)
-
-acceptTxCDDLSerialisation
-  :: ShelleyTxCmdError
-  -> ExceptT ShelleyTxCmdError IO CddlTx
-acceptTxCDDLSerialisation err =
-  case err of
-    ShelleyTxCmdReadTextViewFileError e@(FileError fp (TextEnvelopeDecodeError _)) ->
-      firstExceptT (ShelleyTxCmdTextEnvCddlError e)
-                          $ newExceptT $ readFileTextEnvelopeCddlAnyOf teTypes fp
-
-
-    ShelleyTxCmdReadTextViewFileError e@(FileError fp (TextEnvelopeAesonDecodeError _)) ->
-      firstExceptT (ShelleyTxCmdTextEnvCddlError e)
-                     $ newExceptT $ readFileTextEnvelopeCddlAnyOf teTypes fp
-    ShelleyTxCmdReadTextViewFileError e@(FileError fp (TextEnvelopeTypeError _ _)) ->
-      firstExceptT (ShelleyTxCmdTextEnvCddlError e)
-                     $ newExceptT $ readFileTextEnvelopeCddlAnyOf teTypes fp
-
-    _ -> left err
- where
-  teTypes = [ FromCDDLTx "Witnessed Tx ByronEra" CddlTx
-            , FromCDDLTx "Witnessed Tx ShelleyEra" CddlTx
-            , FromCDDLTx "Witnessed Tx AllegraEra" CddlTx
-            , FromCDDLTx "Witnessed Tx MaryEra" CddlTx
-            , FromCDDLTx "Witnessed Tx AlonzoEra" CddlTx
-            , FromCDDLTx "Witnessed Tx BabbageEra" CddlTx
-            , FromCDDLTx "Unwitnessed Tx ByronEra" CddlTx
-            , FromCDDLTx "Unwitnessed Tx ShelleyEra" CddlTx
-            , FromCDDLTx "Unwitnessed Tx AllegraEra" CddlTx
-            , FromCDDLTx "Unwitnessed Tx MaryEra" CddlTx
-            , FromCDDLTx "Unwitnessed Tx AlonzoEra" CddlTx
-            , FromCDDLTx "Unwitnessed Tx BabbageEra" CddlTx
-            ]
-
-readFileTx :: FilePath -> ExceptT ShelleyTxCmdError IO (InAnyCardanoEra Tx)
-readFileTx fp =
-  handleLeftT
-    (\e -> unCddlTx <$> acceptTxCDDLSerialisation e)
-    (readFileInAnyCardanoEra AsTx fp)
-
-readFileInAnyCardanoEra
-  :: ( HasTextEnvelope (thing ByronEra)
-     , HasTextEnvelope (thing ShelleyEra)
-     , HasTextEnvelope (thing AllegraEra)
-     , HasTextEnvelope (thing MaryEra)
-     , HasTextEnvelope (thing AlonzoEra)
-     , HasTextEnvelope (thing BabbageEra)
-     )
-  => (forall era. AsType era -> AsType (thing era))
-  -> FilePath
-  -> ExceptT ShelleyTxCmdError IO
-            (InAnyCardanoEra thing)
-readFileInAnyCardanoEra asThing file =
-    firstExceptT ShelleyTxCmdReadTextViewFileError
-  . newExceptT
-  $ readFileTextEnvelopeAnyOf
-      [ FromSomeType (asThing AsByronEra)   (InAnyCardanoEra ByronEra)
-      , FromSomeType (asThing AsShelleyEra) (InAnyCardanoEra ShelleyEra)
-      , FromSomeType (asThing AsAllegraEra) (InAnyCardanoEra AllegraEra)
-      , FromSomeType (asThing AsMaryEra)    (InAnyCardanoEra MaryEra)
-      , FromSomeType (asThing AsAlonzoEra)  (InAnyCardanoEra AlonzoEra)
-      , FromSomeType (asThing AsBabbageEra) (InAnyCardanoEra BabbageEra)
-      ]
-      file
 
 readRequiredSigner :: RequiredSigner -> ExceptT ShelleyTxCmdError IO (Hash PaymentKey)
 readRequiredSigner (RequiredSignerHash h) = return h
