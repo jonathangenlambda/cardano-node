@@ -591,13 +591,13 @@ peerSelectionTargetsToObject
 -- DebugPeerSelection Tracer
 --------------------------------------------------------------------------------
 
-namesForDebugPeerSelection :: DebugPeerSelection SockAddr -> [Text]
+namesForDebugPeerSelection :: DebugPeerSelection SockAddr conn -> [Text]
 namesForDebugPeerSelection _ = ["GovernorState"]
 
-severityDebugPeerSelection :: DebugPeerSelection SockAddr -> SeverityS
+severityDebugPeerSelection :: DebugPeerSelection SockAddr conn -> SeverityS
 severityDebugPeerSelection _ = Debug
 
-instance LogFormatting (DebugPeerSelection SockAddr) where
+instance Show conn => LogFormatting (DebugPeerSelection SockAddr conn) where
   forMachine DNormal (TraceGovernorState blockedAt wakeupAfter
                    PeerSelectionState { targets, knownPeers, establishedPeers, activePeers }) =
     mconcat [ "kind" .= String "DebugPeerSelection"
@@ -618,7 +618,7 @@ instance LogFormatting (DebugPeerSelection SockAddr) where
              ]
   forHuman = pack . show
 
-docDebugPeerSelection :: Documented (DebugPeerSelection SockAddr)
+docDebugPeerSelection :: Documented (DebugPeerSelection SockAddr conn)
 docDebugPeerSelection = Documented
   [  DocMsg
       ["GovernorState"]
@@ -750,6 +750,7 @@ namesForConnectionManager TrConnectionCleanup {} = ["ConnectionCleanup"]
 namesForConnectionManager TrConnectionTimeWait {} = ["ConnectionTimeWait"]
 namesForConnectionManager TrConnectionTimeWaitDone {} = ["ConnectionTimeWaitDone"]
 namesForConnectionManager TrConnectionManagerCounters {} = ["ConnectionManagerCounters"]
+namesForConnectionManager TrUnknownConnection {} = ["UnknownConnection"] -- TODO please fix me
 namesForConnectionManager TrState {} = ["State"]
 namesForConnectionManager ConnectionManager.TrUnexpectedlyFalseAssertion {} =
                             ["UnexpectedlyFalseAssertion"]
@@ -757,6 +758,7 @@ namesForConnectionManager ConnectionManager.TrUnexpectedlyFalseAssertion {} =
 severityConnectionManager ::
   ConnectionManagerTrace addr
     (ConnectionHandlerTrace versionNumber agreedOptions) -> SeverityS
+severityConnectionManager TrUnknownConnection {}                  = Debug -- TODO please fix me
 severityConnectionManager TrIncludeConnection {}                  = Debug
 severityConnectionManager TrUnregisterConnection {}               = Debug
 severityConnectionManager TrConnect {}                            = Debug
@@ -791,6 +793,10 @@ severityConnectionManager ConnectionManager.TrUnexpectedlyFalseAssertion {} =
 instance (Show addr, Show versionNumber, Show agreedOptions, LogFormatting addr,
           ToJSON addr, ToJSON versionNumber, ToJSON agreedOptions)
       => LogFormatting (ConnectionManagerTrace addr (ConnectionHandlerTrace versionNumber agreedOptions)) where
+    forMachine _ (TrUnknownConnection _) = -- TODO please fix me
+        mconcat $ reverse
+          [ "kind" .= String "UnknownConnection"
+          ]
     forMachine dtal (TrIncludeConnection prov peerAddr) =
         mconcat $ reverse
           [ "kind" .= String "IncludeConnection"
