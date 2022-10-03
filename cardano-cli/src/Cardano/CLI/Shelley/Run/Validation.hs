@@ -34,8 +34,27 @@ module Cardano.CLI.Shelley.Run.Validation
   , readProtocolParametersSourceSpec
 
   -- * Tx
+  , CddlError
+  , CddlTx(..)
+  , IncompleteTx(..)
   , readFileTx
   , readFileTxBody
+  , renderCddlError
+
+  -- * Tx witnesses
+  , ReadWitnessSigningDataError(..)
+  , renderReadWitnessSigningDataError
+  , SomeWitness(..)
+  , ByronOrShelleyWitness(..)
+  , ShelleyBootstrapWitnessSigningKeyData(..)
+  , CddlWitnessError(..)
+  , readFileTxKeyWitness
+  , readWitnessSigningData
+
+  -- * Required signer
+  , RequiredSignerError(..)
+  , categoriseSomeWitness
+  , readRequiredSigner
 
   -- * Misc
   , renderEra
@@ -44,23 +63,17 @@ module Cardano.CLI.Shelley.Run.Validation
 import           Prelude
 
 import           Control.Monad.Trans.Except (ExceptT (..), runExceptT)
-import           Control.Monad.Trans.Except.Extra (firstExceptT, handleIOExceptT, handleLeftT,
-                   hoistEither, hoistMaybe, left, newExceptT)
+import           Control.Monad.Trans.Except.Extra (firstExceptT, handleIOExceptT, hoistEither, left)
 import qualified Data.Aeson as Aeson
-import           Data.Aeson.Encode.Pretty (encodePretty)
+import           Data.Bifunctor (first)
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.List as List
-import qualified Data.Map.Strict as Map
-import qualified Data.Set as Set
 import qualified Data.Text as Text
-import           Data.Type.Equality (TestEquality (..))
 import           Data.Word
-import qualified System.IO as IO
 
 
 import           Cardano.Api
-import           Cardano.Api.Byron hiding (SomeByronSigningKey (..))
 import           Cardano.Api.Shelley
 
 --TODO: do this nicely via the API too:
@@ -69,17 +82,12 @@ import           Data.Text (Text)
 --TODO: following import needed for orphan Eq Script instance
 import           Cardano.Ledger.Shelley.Scripts ()
 
-import           Cardano.CLI.Run.Friendly (friendlyTxBS, friendlyTxBodyBS)
-import           Cardano.CLI.Shelley.Key (InputDecodeError, readSigningKeyFileAnyOf)
-import           Cardano.CLI.Shelley.Output
+import           Cardano.CLI.Shelley.Key
 import           Cardano.CLI.Shelley.Parsers
 import           Cardano.CLI.Shelley.Run.Genesis (ShelleyGenesisCmdError (..),
                    readShelleyGenesisWithDefault)
 import           Cardano.CLI.Shelley.Script
 import           Cardano.CLI.Types
-
-import           Ouroboros.Consensus.Cardano.Block (EraMismatch (..))
-import qualified Ouroboros.Network.Protocol.LocalTxSubmission.Client as Net.Tx
 
 -- Metadata
 
@@ -138,21 +146,21 @@ readFileTxMetadata mapping (MetadataFileJSON fp) = do
           $ LBS.readFile fp
   v <- firstExceptT (MetadataErrorJsonParseError fp)
           $ hoistEither $ Aeson.eitherDecode' bs
-  txMetadata <- firstExceptT (MetadataErrorConversionError fp)
+  txMetadata' <- firstExceptT (MetadataErrorConversionError fp)
                   . hoistEither $ metadataFromJson mapping v
   firstExceptT (MetadataErrorValidationError fp)
     . hoistEither $ do
-      validateTxMetadata txMetadata
-      return txMetadata
+      validateTxMetadata txMetadata'
+      return txMetadata'
 readFileTxMetadata _ (MetadataFileCBOR fp) = do
   bs <- handleIOExceptT (MetadataErrorFile . FileIOError fp)
           $ BS.readFile fp
-  txMetadata <- firstExceptT (MetadataErrorDecodeError fp)
+  txMetadata' <- firstExceptT (MetadataErrorDecodeError fp)
                   . hoistEither $ deserialiseFromCBOR AsTxMetadata bs
   firstExceptT (MetadataErrorValidationError fp)
     . hoistEither $ do
-      validateTxMetadata txMetadata
-      return txMetadata
+      validateTxMetadata txMetadata'
+      return txMetadata'
 
 -- Script witnesses/ Scripts
 
@@ -397,13 +405,14 @@ readProtocolParameters (ProtocolParamsFile fpath) = do
 
 -- Tx & TxBody
 
+newtype CddlTx = CddlTx {unCddlTx :: InAnyCardanoEra Tx} deriving (Show, Eq)
 
-readFileTx :: FilePath -> IO (Either (FileError TextEnvelopeError) (InAnyCardanoEra Tx))
-readFileTx fp =
-  handleLeftT
-    (\e -> unCddlTx <$> acceptTxCDDLSerialisation e)
-    (readFileInAnyCardanoEra AsTx fp)
-
+readFileTx :: FilePath -> IO (Either CddlError (InAnyCardanoEra Tx))
+readFileTx fp = do
+  eAnyTx <- readFileInAnyCardanoEra AsTx fp
+  case eAnyTx of
+    Left e -> fmap unCddlTx <$> acceptTxCDDLSerialisation e
+    Right tx -> return $ Right tx
 
 -- IncompleteCddlFormattedTx is an CDDL formatted tx or partial tx
 -- (respectively needs additional witnesses or totally unwitnessed)
@@ -414,13 +423,260 @@ data IncompleteTx
   = UnwitnessedCliFormattedTxBody (InAnyCardanoEra TxBody)
   | IncompleteCddlFormattedTx (InAnyCardanoEra Tx)
 
-readFileTxBody :: FilePath -> IO (Either (FileError TextEnvelopeError) IncompleteTx)
-readFileTxBody fp =
-  handleLeftT
-    (\e -> IncompleteCddlFormattedTx . unCddlTx <$> acceptTxCDDLSerialisation e)
-    (UnwitnessedCliFormattedTxBody <$> readFileInAnyCardanoEra AsTxBody fp)
+readFileTxBody :: FilePath -> IO (Either CddlError IncompleteTx)
+readFileTxBody fp = do
+  eTxBody <- readFileInAnyCardanoEra AsTxBody fp
+  case eTxBody of
+    Left e -> fmap (IncompleteCddlFormattedTx . unCddlTx) <$> acceptTxCDDLSerialisation e
+    Right txBody -> return $ Right $ UnwitnessedCliFormattedTxBody txBody
+
+data CddlError = CddlErrorTextEnv
+                   !(FileError TextEnvelopeError)
+                   !(FileError TextEnvelopeCddlError)
+               | CddlIOError (FileError TextEnvelopeError)
+
+renderCddlError :: CddlError -> Text
+renderCddlError (CddlErrorTextEnv textEnvErr cddlErr) =
+  "Failed to decode neither the cli's serialisation format nor the ledger's \
+  \CDDL serialisation format. TextEnvelope error: " <> Text.pack (displayError textEnvErr) <> "\n" <>
+  "TextEnvelopeCddl error: " <> Text.pack (displayError cddlErr)
+renderCddlError (CddlIOError e) = Text.pack $ displayError e
+
+acceptTxCDDLSerialisation
+  :: FileError TextEnvelopeError
+  -> IO (Either CddlError CddlTx)
+acceptTxCDDLSerialisation err =
+  case err of
+   e@(FileError fp (TextEnvelopeDecodeError _)) ->
+      first (CddlErrorTextEnv e) <$> readCddlTx fp
+   e@(FileError fp (TextEnvelopeAesonDecodeError _)) ->
+      first (CddlErrorTextEnv e) <$> readCddlTx fp
+   e@(FileError fp (TextEnvelopeTypeError _ _)) ->
+      first (CddlErrorTextEnv e) <$> readCddlTx fp
+   e@FileErrorTempFile{} -> return . Left $ CddlIOError e
+   e@FileIOError{} -> return . Left $ CddlIOError e
+
+readCddlTx :: FilePath -> IO (Either (FileError TextEnvelopeCddlError) CddlTx)
+readCddlTx = readFileTextEnvelopeCddlAnyOf teTypes
+ where
+    teTypes = [ FromCDDLTx "Witnessed Tx ByronEra" CddlTx
+              , FromCDDLTx "Witnessed Tx ShelleyEra" CddlTx
+              , FromCDDLTx "Witnessed Tx AllegraEra" CddlTx
+              , FromCDDLTx "Witnessed Tx MaryEra" CddlTx
+              , FromCDDLTx "Witnessed Tx AlonzoEra" CddlTx
+              , FromCDDLTx "Witnessed Tx BabbageEra" CddlTx
+              , FromCDDLTx "Unwitnessed Tx ByronEra" CddlTx
+              , FromCDDLTx "Unwitnessed Tx ShelleyEra" CddlTx
+              , FromCDDLTx "Unwitnessed Tx AllegraEra" CddlTx
+              , FromCDDLTx "Unwitnessed Tx MaryEra" CddlTx
+              , FromCDDLTx "Unwitnessed Tx AlonzoEra" CddlTx
+              , FromCDDLTx "Unwitnessed Tx BabbageEra" CddlTx
+              ]
+
+-- Tx witnesses
+
+newtype CddlWitness = CddlWitness { unCddlWitness :: InAnyCardanoEra KeyWitness}
+
+readFileTxKeyWitness :: FilePath
+                -> IO (Either CddlWitnessError (InAnyCardanoEra KeyWitness))
+readFileTxKeyWitness fp = do
+  eWitness <- readFileInAnyCardanoEra AsKeyWitness fp
+  case eWitness of
+    Left e -> fmap unCddlWitness <$> acceptKeyWitnessCDDLSerialisation e
+    Right keyWit -> return $ Right keyWit
+
+data CddlWitnessError
+  = CddlWitnessErrorTextEnv
+      (FileError TextEnvelopeError)
+      (FileError TextEnvelopeCddlError)
+  | CddlWitnessIOError (FileError TextEnvelopeError)
+
+-- TODO: This is a stop gap to avoid modifying the TextEnvelope
+-- related functions. We intend to remove this after fully deprecating
+-- the cli's serialisation format
+acceptKeyWitnessCDDLSerialisation
+  :: FileError TextEnvelopeError
+  -> IO (Either CddlWitnessError CddlWitness)
+acceptKeyWitnessCDDLSerialisation err =
+  case err of
+    e@(FileError fp (TextEnvelopeDecodeError _)) ->
+      first (CddlWitnessErrorTextEnv e) <$> readCddlWitness fp
+    e@(FileError fp (TextEnvelopeAesonDecodeError _)) ->
+      first (CddlWitnessErrorTextEnv e) <$> readCddlWitness fp
+    e@(FileError fp (TextEnvelopeTypeError _ _)) ->
+      first (CddlWitnessErrorTextEnv e) <$> readCddlWitness fp
+    e@FileErrorTempFile{} -> return . Left $ CddlWitnessIOError e
+    e@FileIOError{} -> return . Left $ CddlWitnessIOError e
+
+readCddlWitness
+  :: FilePath
+  -> IO (Either (FileError TextEnvelopeCddlError) CddlWitness)
+readCddlWitness fp = do
+  readFileTextEnvelopeCddlAnyOf teTypes fp
+ where
+  teTypes = [ FromCDDLWitness "TxWitness ShelleyEra" CddlWitness
+            , FromCDDLWitness "TxWitness AllegraEra" CddlWitness
+            , FromCDDLWitness "TxWitness MaryEra" CddlWitness
+            , FromCDDLWitness "TxWitness AlonzoEra" CddlWitness
+            , FromCDDLWitness "TxWitness BabbageEra" CddlWitness
+            ]
+
+-- Witness handling
+
+data SomeWitness
+  = AByronSigningKey           (SigningKey ByronKey) (Maybe (Address ByronAddr))
+  | APaymentSigningKey         (SigningKey PaymentKey)
+  | APaymentExtendedSigningKey (SigningKey PaymentExtendedKey)
+  | AStakeSigningKey           (SigningKey StakeKey)
+  | AStakeExtendedSigningKey   (SigningKey StakeExtendedKey)
+  | AStakePoolSigningKey       (SigningKey StakePoolKey)
+  | AGenesisSigningKey         (SigningKey GenesisKey)
+  | AGenesisExtendedSigningKey (SigningKey GenesisExtendedKey)
+  | AGenesisDelegateSigningKey (SigningKey GenesisDelegateKey)
+  | AGenesisDelegateExtendedSigningKey
+                               (SigningKey GenesisDelegateExtendedKey)
+  | AGenesisUTxOSigningKey     (SigningKey GenesisUTxOKey)
+
+
+-- | Data required for constructing a Shelley bootstrap witness.
+data ShelleyBootstrapWitnessSigningKeyData
+  = ShelleyBootstrapWitnessSigningKeyData
+      !(SigningKey ByronKey)
+      -- ^ Byron signing key.
+      !(Maybe (Address ByronAddr))
+      -- ^ An optionally specified Byron address.
+      --
+      -- If specified, both the network ID and derivation path are extracted
+      -- from the address and used in the construction of the Byron witness.
+
+-- | Some kind of Byron or Shelley witness.
+data ByronOrShelleyWitness
+  = AByronWitness !ShelleyBootstrapWitnessSigningKeyData
+  | AShelleyKeyWitness !ShelleyWitnessSigningKey
+
+categoriseSomeWitness :: SomeWitness -> ByronOrShelleyWitness
+categoriseSomeWitness swsk =
+  case swsk of
+    AByronSigningKey           sk addr -> AByronWitness (ShelleyBootstrapWitnessSigningKeyData sk addr)
+    APaymentSigningKey         sk      -> AShelleyKeyWitness (WitnessPaymentKey         sk)
+    APaymentExtendedSigningKey sk      -> AShelleyKeyWitness (WitnessPaymentExtendedKey sk)
+    AStakeSigningKey           sk      -> AShelleyKeyWitness (WitnessStakeKey           sk)
+    AStakeExtendedSigningKey   sk      -> AShelleyKeyWitness (WitnessStakeExtendedKey   sk)
+    AStakePoolSigningKey       sk      -> AShelleyKeyWitness (WitnessStakePoolKey       sk)
+    AGenesisSigningKey         sk      -> AShelleyKeyWitness (WitnessGenesisKey sk)
+    AGenesisExtendedSigningKey sk      -> AShelleyKeyWitness (WitnessGenesisExtendedKey sk)
+    AGenesisDelegateSigningKey sk      -> AShelleyKeyWitness (WitnessGenesisDelegateKey sk)
+    AGenesisDelegateExtendedSigningKey sk
+                                       -> AShelleyKeyWitness (WitnessGenesisDelegateExtendedKey sk)
+    AGenesisUTxOSigningKey     sk      -> AShelleyKeyWitness (WitnessGenesisUTxOKey     sk)
+
+data ReadWitnessSigningDataError
+  = ReadWitnessSigningDataSigningKeyDecodeError !(FileError InputDecodeError)
+  | ReadWitnessSigningDataScriptError !(FileError JsonDecodeError)
+  | ReadWitnessSigningDataSigningKeyAndAddressMismatch
+  -- ^ A Byron address was specified alongside a non-Byron signing key.
+  deriving Show
+
+-- | Render an error message for a 'ReadWitnessSigningDataError'.
+renderReadWitnessSigningDataError :: ReadWitnessSigningDataError -> Text
+renderReadWitnessSigningDataError err =
+  case err of
+    ReadWitnessSigningDataSigningKeyDecodeError fileErr ->
+      "Error reading signing key: " <> Text.pack (displayError fileErr)
+    ReadWitnessSigningDataScriptError fileErr ->
+      "Error reading script: " <> Text.pack (displayError fileErr)
+    ReadWitnessSigningDataSigningKeyAndAddressMismatch ->
+      "Only a Byron signing key may be accompanied by a Byron address."
+
+readWitnessSigningData
+  :: WitnessSigningData
+  -> IO (Either ReadWitnessSigningDataError SomeWitness)
+readWitnessSigningData (KeyWitnessSigningData skFile mbByronAddr) = do
+    eRes <- first ReadWitnessSigningDataSigningKeyDecodeError
+             <$> readSigningKeyFileAnyOf bech32FileTypes textEnvFileTypes skFile
+    return $ do
+      res <- eRes
+      case (res, mbByronAddr) of
+        (AByronSigningKey _ _, Just _) -> pure res
+        (AByronSigningKey _ _, Nothing) -> pure res
+        (_, Nothing) -> pure res
+        (_, Just _) ->
+          -- A Byron address should only be specified along with a Byron signing key.
+          Left ReadWitnessSigningDataSigningKeyAndAddressMismatch
+  where
+    textEnvFileTypes =
+      [ FromSomeType (AsSigningKey AsByronKey)
+                          (`AByronSigningKey` mbByronAddr)
+      , FromSomeType (AsSigningKey AsPaymentKey)
+                          APaymentSigningKey
+      , FromSomeType (AsSigningKey AsPaymentExtendedKey)
+                          APaymentExtendedSigningKey
+      , FromSomeType (AsSigningKey AsStakeKey)
+                          AStakeSigningKey
+      , FromSomeType (AsSigningKey AsStakeExtendedKey)
+                          AStakeExtendedSigningKey
+      , FromSomeType (AsSigningKey AsStakePoolKey)
+                          AStakePoolSigningKey
+      , FromSomeType (AsSigningKey AsGenesisKey)
+                          AGenesisSigningKey
+      , FromSomeType (AsSigningKey AsGenesisExtendedKey)
+                          AGenesisExtendedSigningKey
+      , FromSomeType (AsSigningKey AsGenesisDelegateKey)
+                          AGenesisDelegateSigningKey
+      , FromSomeType (AsSigningKey AsGenesisDelegateExtendedKey)
+                          AGenesisDelegateExtendedSigningKey
+      , FromSomeType (AsSigningKey AsGenesisUTxOKey)
+                          AGenesisUTxOSigningKey
+      ]
+
+    bech32FileTypes =
+      [ FromSomeType (AsSigningKey AsPaymentKey)
+                          APaymentSigningKey
+      , FromSomeType (AsSigningKey AsPaymentExtendedKey)
+                          APaymentExtendedSigningKey
+      , FromSomeType (AsSigningKey AsStakeKey)
+                          AStakeSigningKey
+      , FromSomeType (AsSigningKey AsStakeExtendedKey)
+                          AStakeExtendedSigningKey
+      , FromSomeType (AsSigningKey AsStakePoolKey)
+                          AStakePoolSigningKey
+      ]
+
+-- Required signers
+
+data RequiredSignerError
+  = RequiredSignerErrorFile (FileError InputDecodeError)
+  | RequiredSignerErrorByronKey SigningKeyFile
+
+readRequiredSigner :: RequiredSigner -> IO (Either RequiredSignerError (Hash PaymentKey))
+readRequiredSigner (RequiredSignerHash h) = return $ Right h
+readRequiredSigner (RequiredSignerSkeyFile skFile) = do
+  eKeyWit <- first RequiredSignerErrorFile <$> readSigningKeyFileAnyOf bech32FileTypes textEnvFileTypes skFile
+  return $ do
+    keyWit <- eKeyWit
+    case categoriseSomeWitness keyWit of
+      AByronWitness _ ->
+        Left $ RequiredSignerErrorByronKey skFile
+      AShelleyKeyWitness skey ->
+        return . getHash $ toShelleySigningKey skey
+ where
+   textEnvFileTypes =
+     [ FromSomeType (AsSigningKey AsPaymentKey) APaymentSigningKey
+     , FromSomeType (AsSigningKey AsPaymentExtendedKey)
+                          APaymentExtendedSigningKey
+     ]
+   bech32FileTypes = []
+
+   getHash :: ShelleySigningKey -> Hash PaymentKey
+   getHash (ShelleyExtendedSigningKey sk) =
+     let extSKey = PaymentExtendedSigningKey sk
+         payVKey = castVerificationKey $ getVerificationKey extSKey
+     in verificationKeyHash payVKey
+   getHash (ShelleyNormalSigningKey sk) =
+     verificationKeyHash . getVerificationKey $ PaymentSigningKey sk
 
 -- Misc
+
 readFileInAnyCardanoEra
   :: ( HasTextEnvelope (thing ByronEra)
      , HasTextEnvelope (thing ShelleyEra)
@@ -441,45 +697,6 @@ readFileInAnyCardanoEra asThing =
    , FromSomeType (asThing AsAlonzoEra)  (InAnyCardanoEra AlonzoEra)
    , FromSomeType (asThing AsBabbageEra) (InAnyCardanoEra BabbageEra)
    ]
-
-data CddlError = CddlErrorTextEnvCddl
-                   !(FileError TextEnvelopeError)
-                   !(FileError TextEnvelopeCddlError)
-
-acceptTxCDDLSerialisation
-  :: FileError TextEnvelopeError
-  -> ExceptT CddlError IO CddlTx
-acceptTxCDDLSerialisation err =
-  case err of
-   e@(FileError fp (TextEnvelopeDecodeError _)) ->
-      firstExceptT (CddlErrorTextEnvCddl e)
-                          $ newExceptT $ readFileTextEnvelopeCddlAnyOf teTypes fp
-
-
-   e@(FileError fp (TextEnvelopeAesonDecodeError _)) ->
-      firstExceptT (CddlErrorTextEnvCddl e)
-                     $ newExceptT $ readFileTextEnvelopeCddlAnyOf teTypes fp
-   e@(FileError fp (TextEnvelopeTypeError _ _)) ->
-      firstExceptT (CddlErrorTextEnvCddl e)
-                     $ newExceptT $ readFileTextEnvelopeCddlAnyOf teTypes fp
-   e@FileErrorTempFile -> error ""
-   FileIOError _ _ -> error ""
- where
-  teTypes = [ FromCDDLTx "Witnessed Tx ByronEra" CddlTx
-            , FromCDDLTx "Witnessed Tx ShelleyEra" CddlTx
-            , FromCDDLTx "Witnessed Tx AllegraEra" CddlTx
-            , FromCDDLTx "Witnessed Tx MaryEra" CddlTx
-            , FromCDDLTx "Witnessed Tx AlonzoEra" CddlTx
-            , FromCDDLTx "Witnessed Tx BabbageEra" CddlTx
-            , FromCDDLTx "Unwitnessed Tx ByronEra" CddlTx
-            , FromCDDLTx "Unwitnessed Tx ShelleyEra" CddlTx
-            , FromCDDLTx "Unwitnessed Tx AllegraEra" CddlTx
-            , FromCDDLTx "Unwitnessed Tx MaryEra" CddlTx
-            , FromCDDLTx "Unwitnessed Tx AlonzoEra" CddlTx
-            , FromCDDLTx "Unwitnessed Tx BabbageEra" CddlTx
-            ]
-
-
 
 -- TODO: Move me
 

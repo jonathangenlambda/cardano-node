@@ -7,7 +7,6 @@
 module Cardano.CLI.Types
   ( BalanceTxExecUnits (..)
   , CBORObject (..)
-  , CddlTx (..)
   , CertificateFile (..)
   , CurrentKesPeriod (..)
   , EpochLeadershipSchedule (..)
@@ -51,8 +50,8 @@ import           Data.Word (Word64)
 import qualified Cardano.Chain.Slotting as Byron
 
 import           Cardano.Api (AddressAny, AnyScriptLanguage, EpochNo, ExecutionUnits, Hash,
-                   InAnyCardanoEra, PaymentKey, PolicyId, ScriptData, SlotNo (SlotNo), Tx, TxIn,
-                   Value, WitCtxMint, WitCtxStake, WitCtxTxIn)
+                   PaymentKey, PolicyId, ScriptData, SlotNo (SlotNo), TxIn, Value, WitCtxMint,
+                   WitCtxStake, WitCtxTxIn)
 
 import qualified Cardano.Ledger.Crypto as Crypto
 
@@ -73,8 +72,6 @@ data CBORObject = CBORBlockByron Byron.EpochSlots
                 | CBORUpdateProposalByron
                 | CBORVoteByron
                 deriving Show
-
-newtype CddlTx = CddlTx {unCddlTx :: InAnyCardanoEra Tx} deriving (Show, Eq)
 
 -- Encompasses stake certificates, stake pool certificates,
 -- genesis delegate certificates and MIR certificates.
