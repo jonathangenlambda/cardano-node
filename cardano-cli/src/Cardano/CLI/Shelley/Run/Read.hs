@@ -6,7 +6,7 @@
 
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
-module Cardano.CLI.Shelley.Run.Validation
+module Cardano.CLI.Shelley.Run.Read
   ( -- * Metadata
     MetadataError(..)
   , renderMetadataError
@@ -20,18 +20,15 @@ module Cardano.CLI.Shelley.Run.Validation
   , readScriptWitness
   , readScriptWitnessFiles
   , readScriptWitnessFilesThruple
+  , ScriptDecodeError (..)
+  , deserialiseScriptInAnyLang
+  , readFileScriptInAnyLang
 
   -- * Script data (datums and redeemers)
   , ScriptDataError(..)
   , readScriptDatumOrFile
   , readScriptRedeemerOrFile
   , renderScriptDataError
-
-  -- * Protocol Parameters
-  , ProtocolParamsError(..)
-  , renderProtocolParamsError
-  , readProtocolParameters
-  , readProtocolParametersSourceSpec
 
   -- * Tx
   , CddlError
@@ -84,9 +81,6 @@ import           Cardano.Ledger.Shelley.Scripts ()
 
 import           Cardano.CLI.Shelley.Key
 import           Cardano.CLI.Shelley.Parsers
-import           Cardano.CLI.Shelley.Run.Genesis (ShelleyGenesisCmdError (..),
-                   readShelleyGenesisWithDefault)
-import           Cardano.CLI.Shelley.Script
 import           Cardano.CLI.Types
 
 -- Metadata
@@ -372,36 +366,86 @@ readScriptDataOrFile (ScriptDataCborFile fp) = do
   return sd
 
 
--- Protocol Parameters
+--
+-- Handling decoding the variety of script languages and formats
+--
 
-data ProtocolParamsError
-  = ProtocolParamsErrorFile (FileError ())
-  | ProtocolParamsErrorJSON !FilePath !Text
-  | ProtocolParamsErrorGenesis !ShelleyGenesisCmdError
+data ScriptDecodeError =
+       ScriptDecodeTextEnvelopeError TextEnvelopeError
+     | ScriptDecodeSimpleScriptError JsonDecodeError
+  deriving Show
 
-renderProtocolParamsError :: ProtocolParamsError -> Text
-renderProtocolParamsError (ProtocolParamsErrorFile fileErr) =
-  Text.pack $ displayError fileErr
-renderProtocolParamsError (ProtocolParamsErrorJSON fp jsonErr) =
-  "Error while decoding the protocol parameters at: " <> Text.pack fp <> " Error: " <> jsonErr
-renderProtocolParamsError (ProtocolParamsErrorGenesis err) =
-  Text.pack $ displayError  err
+instance Error ScriptDecodeError where
+  displayError (ScriptDecodeTextEnvelopeError err) =
+    "Error decoding script: " ++ displayError err
+  displayError (ScriptDecodeSimpleScriptError err) =
+    "Syntax error in script: " ++ displayError err
 
-readProtocolParametersSourceSpec :: ProtocolParamsSourceSpec
-                                 -> ExceptT ProtocolParamsError IO ProtocolParameters
-readProtocolParametersSourceSpec (ParamsFromGenesis (GenesisFile f)) =
-  fromShelleyPParams . sgProtocolParams
-    <$> firstExceptT ProtocolParamsErrorGenesis (readShelleyGenesisWithDefault f id)
-readProtocolParametersSourceSpec (ParamsFromFile f) = readProtocolParameters f
 
---TODO: eliminate this and get only the necessary params, and get them in a more
--- helpful way rather than requiring them as a local file.
-readProtocolParameters :: ProtocolParamsFile
-                       -> ExceptT ProtocolParamsError IO ProtocolParameters
-readProtocolParameters (ProtocolParamsFile fpath) = do
-  pparams <- handleIOExceptT (ProtocolParamsErrorFile . FileIOError fpath) $ LBS.readFile fpath
-  firstExceptT (ProtocolParamsErrorJSON fpath . Text.pack) . hoistEither $
-    Aeson.eitherDecode' pparams
+-- | Read a script file. The file can either be in the text envelope format
+-- wrapping the binary representation of any of the supported script languages,
+-- or alternatively it can be a JSON format file for one of the simple script
+-- language versions.
+--
+readFileScriptInAnyLang :: FilePath
+                        -> ExceptT (FileError ScriptDecodeError) IO
+                                   ScriptInAnyLang
+readFileScriptInAnyLang file = do
+  scriptBytes <- handleIOExceptT (FileIOError file) $ BS.readFile file
+  firstExceptT (FileError file) $ hoistEither $
+    deserialiseScriptInAnyLang scriptBytes
+
+
+deserialiseScriptInAnyLang :: BS.ByteString
+                           -> Either ScriptDecodeError ScriptInAnyLang
+deserialiseScriptInAnyLang bs =
+    -- Accept either the text envelope format wrapping the binary serialisation,
+    -- or accept the simple script language in its JSON format.
+    --
+    case deserialiseFromJSON AsTextEnvelope bs of
+      Left _   ->
+        -- The SimpleScript language has the property that it is backwards
+        -- compatible, so we can parse as the latest version and then downgrade
+        -- to the minimum version that has all the features actually used.
+        case deserialiseFromJSON (AsSimpleScript AsSimpleScriptV2) bs of
+          Left  err    -> Left (ScriptDecodeSimpleScriptError err)
+          Right script -> Right (toMinimumSimpleScriptVersion script)
+
+      Right te ->
+        case deserialiseFromTextEnvelopeAnyOf textEnvTypes te of
+          Left  err    -> Left (ScriptDecodeTextEnvelopeError err)
+          Right script -> Right script
+
+  where
+    -- TODO: Think of a way to get type checker to warn when there is a missing
+    -- script version.
+    textEnvTypes :: [FromSomeType HasTextEnvelope ScriptInAnyLang]
+    textEnvTypes =
+      [ FromSomeType (AsScript AsSimpleScriptV1)
+                     (ScriptInAnyLang (SimpleScriptLanguage SimpleScriptV1))
+
+      , FromSomeType (AsScript AsSimpleScriptV2)
+                     (ScriptInAnyLang (SimpleScriptLanguage SimpleScriptV2))
+
+      , FromSomeType (AsScript AsPlutusScriptV1)
+                     (ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV1))
+
+      , FromSomeType (AsScript AsPlutusScriptV2)
+                     (ScriptInAnyLang (PlutusScriptLanguage PlutusScriptV2))
+      ]
+
+    toMinimumSimpleScriptVersion :: SimpleScript SimpleScriptV2
+                                 -> ScriptInAnyLang
+    toMinimumSimpleScriptVersion s =
+      -- TODO alonzo: this will need to be adjusted when more versions are added
+      -- with appropriate helper functions it can probably be done in an
+      -- era-generic style
+      case adjustSimpleScriptVersion SimpleScriptV1 s of
+        Nothing -> ScriptInAnyLang (SimpleScriptLanguage SimpleScriptV2)
+                                   (SimpleScript SimpleScriptV2 s)
+        Just s' -> ScriptInAnyLang (SimpleScriptLanguage SimpleScriptV1)
+                                   (SimpleScript SimpleScriptV1 s')
+
 
 -- Tx & TxBody
 

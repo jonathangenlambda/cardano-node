@@ -44,8 +44,9 @@ import           Cardano.Ledger.Shelley.Scripts ()
 import           Cardano.CLI.Run.Friendly (friendlyTxBS, friendlyTxBodyBS)
 import           Cardano.CLI.Shelley.Output
 import           Cardano.CLI.Shelley.Parsers
-import           Cardano.CLI.Shelley.Run.Validation
-import           Cardano.CLI.Shelley.Script
+import           Cardano.CLI.Shelley.Run.Genesis
+import           Cardano.CLI.Shelley.Run.Read
+import           Cardano.CLI.Shelley.Run.Validate
 import           Cardano.CLI.Types
 
 import           Ouroboros.Consensus.Cardano.Block (EraMismatch (..))
@@ -104,6 +105,13 @@ data ShelleyTxCmdError
   | ShelleyTxCmdCddlError CddlError
   | ShelleyTxCmdCddlWitnessError CddlWitnessError
   | ShelleyTxCmdRequiredSignerError RequiredSignerError
+  -- Validation errors
+  | ShelleyTxCmdAuxScriptsValidationError TxAuxScriptsValidationError
+  | ShelleyTxCmdTotalCollateralValidationError TxTotalCollateralValidationError
+  | ShelleyTxCmdReturnCollateralValidationError TxReturnCollateralValidationError
+  | ShelleyTxCmdTxFeeValidationError TxFeeValidationError
+  | ShelleyTxCmdTxValidityLowerBoundValidationError TxValidityLowerBoundValidationError
+  | ShelleyTxCmdTxValidityUpperBoundValidationError TxValidityUpperBoundValidationError
 
 renderShelleyTxCmdError :: ShelleyTxCmdError -> Text
 renderShelleyTxCmdError err =
@@ -247,7 +255,9 @@ runTransactionCmd cmd =
       txMetadata <- firstExceptT ShelleyTxCmdMetadataError
                       . newExceptT $ readTxMetadata cEra metadataSchema metadataFiles
       valuesWithScriptWits <- readValueScriptWitnesses cEra $ maybe (mempty, []) id mValue
-      txAuxScripts <- validateTxAuxScripts cEra scriptFiles
+      scripts <- firstExceptT ShelleyTxCmdScriptFileError $
+                         mapM (readFileScriptInAnyLang . unScriptFile) scriptFiles
+      txAuxScripts <- hoistEither $ first ShelleyTxCmdAuxScriptsValidationError $ validateTxAuxScripts cEra scripts
       mpparams <- case mPparams of
                     Just ppFp -> Just <$> firstExceptT ShelleyTxCmdProtocolParamsError (readProtocolParametersSourceSpec ppFp)
                     Nothing -> return Nothing
@@ -336,7 +346,9 @@ runTransactionCmd cmd =
       txMetadata <- firstExceptT ShelleyTxCmdMetadataError
                       . newExceptT $ readTxMetadata cEra metadataSchema metadataFiles
       valuesWithScriptWits <- readValueScriptWitnesses cEra $ maybe (mempty, []) id mValue
-      txAuxScripts <- validateTxAuxScripts cEra scriptFiles
+      scripts <- firstExceptT ShelleyTxCmdScriptFileError $
+                         mapM (readFileScriptInAnyLang . unScriptFile) scriptFiles
+      txAuxScripts <- hoistEither $ first ShelleyTxCmdAuxScriptsValidationError $ validateTxAuxScripts cEra scripts
       pparams <- case mpparams of
                   Just ppFp -> Just <$> firstExceptT ShelleyTxCmdProtocolParamsError (readProtocolParametersSourceSpec ppFp)
                   Nothing -> return Nothing
@@ -433,9 +445,12 @@ runTxBuildRaw era
 
     validatedCollateralTxIns <- validateTxInsCollateral era txinsc
     validatedRefInputs <- validateTxInsReference era allReferenceInputs
-    validatedTotCollateral <- validateTxTotalCollateral era mTotCollateral
-    validatedRetCol <- validateTxReturnCollateral era mReturnCollateral
-    validatedFee <- validateTxFee era mFee
+    validatedTotCollateral
+      <- first ShelleyTxCmdTotalCollateralValidationError $ validateTxTotalCollateral era mTotCollateral
+    validatedRetCol
+      <- first ShelleyTxCmdReturnCollateralValidationError $ validateTxReturnCollateral era mReturnCollateral
+    validatedFee
+      <- first validateTxFee era mFee
     validatedBounds <- (,) <$> validateTxValidityLowerBound era mLowerBound
                            <*> validateTxValidityUpperBound era mUpperBound
     validatedReqSigners <- validateRequiredSigners era reqSigners
@@ -524,11 +539,13 @@ runTxBuild era (AnyConsensusModeParams cModeParams) networkId mScriptValidity
 
   validatedCollateralTxIns <- hoistEither $ validateTxInsCollateral era txinsc
   validatedRefInputs <- hoistEither $ validateTxInsReference era allReferenceInputs
-  validatedTotCollateral <- hoistEither $ validateTxTotalCollateral era mTotCollateral
-  validatedRetCol <- hoistEither $ validateTxReturnCollateral era mReturnCollateral
-  dFee <- hoistEither $ validateTxFee era dummyFee
-  validatedBounds <- (,) <$> hoistEither (validateTxValidityLowerBound era mLowerBound)
-                         <*> hoistEither (validateTxValidityUpperBound era mUpperBound)
+  validatedTotCollateral
+    <- hoistEither $ first ShelleyTxCmdTotalCollateralValidationError $ validateTxTotalCollateral era mTotCollateral
+  validatedRetCol
+    <- hoistEither $ first ShelleyTxCmdReturnCollateralValidationError $ validateTxReturnCollateral era mReturnCollateral
+  dFee <- hoistEither $ first ShelleyTxCmdTxFeeValidationError $ validateTxFee era dummyFee
+  validatedBounds <- (,) <$> hoistEither (first ShelleyTxCmdTxValidityLowerBoundValidationError $ validateTxValidityLowerBound era mLowerBound)
+                         <*> hoistEither (first ShelleyTxCmdTxValidityUpperBoundValidationError $ validateTxValidityUpperBound era mUpperBound)
   validatedReqSigners <- hoistEither $ validateRequiredSigners era reqSigners
   validatedPParams <- hoistEither $ validateProtocolParameters era mpparams
   validatedTxWtdrwls <- hoistEither $ validateTxWithdrawals era withdrawals
@@ -738,13 +755,13 @@ toAddressInAnyEra era addrAny =
 toTxOutValueInAnyEra
   :: CardanoEra era
   -> Value
-  -> ExceptT ShelleyTxCmdError IO (TxOutValue era)
+  -> Either ShelleyTxCmdError (TxOutValue era)
 toTxOutValueInAnyEra era val =
   case multiAssetSupportedInEra era of
     Left adaOnlyInEra ->
       case valueToLovelace val of
         Just l  -> return (TxOutAdaOnly adaOnlyInEra l)
-        Nothing -> txFeatureMismatch era TxFeatureMultiAssetOutputs
+        Nothing -> txFeatureMismatchPure era TxFeatureMultiAssetOutputs
     Right multiAssetInEra -> return (TxOutValue multiAssetInEra val)
 
 toTxOutInAnyEra :: CardanoEra era
@@ -752,7 +769,7 @@ toTxOutInAnyEra :: CardanoEra era
                 -> ExceptT ShelleyTxCmdError IO (TxOut CtxTx era)
 toTxOutInAnyEra era (TxOutAnyEra addr' val' mDatumHash refScriptFp) = do
   addr <- hoistEither $ toAddressInAnyEra era addr'
-  val <- toTxOutValueInAnyEra era val'
+  val <- hoistEither $ toTxOutValueInAnyEra era val'
   (datum, refScript)
     <- case (scriptDataSupportedInEra era, refInsScriptsAndInlineDatsSupportedInEra era) of
          (Nothing, Nothing) -> pure (TxOutDatumNone, ReferenceScriptNone)
@@ -819,172 +836,6 @@ toTxOutInAnyEra era (TxOutAnyEra addr' val' mDatumHash refScriptFp) = do
         txFeatureMismatch era TxFeatureInlineDatums
       TxOutDatumByNone -> pure TxOutDatumNone
 
-validateTxFee :: CardanoEra era
-              -> Maybe Lovelace
-              -> Either ShelleyTxCmdError (TxFee era)
-validateTxFee era mfee =
-    case (txFeesExplicitInEra era, mfee) of
-      (Left  implicit, Nothing)  -> return (TxFeeImplicit implicit)
-      (Right explicit, Just fee) -> return (TxFeeExplicit explicit fee)
-
-      (Right _, Nothing) -> txFeatureMismatchPure era TxFeatureImplicitFees
-      (Left  _, Just _)  -> txFeatureMismatchPure era TxFeatureExplicitFees
-
-validateTxTotalCollateral :: CardanoEra era
-                          -> Maybe Lovelace
-                          -> Either ShelleyTxCmdError (TxTotalCollateral era)
-validateTxTotalCollateral _ Nothing = return TxTotalCollateralNone
-validateTxTotalCollateral era (Just coll) =
-  case totalAndReturnCollateralSupportedInEra era of
-    Just supp -> return $ TxTotalCollateral supp coll
-    Nothing -> txFeatureMismatchPure era TxFeatureTotalCollateral
-
-validateTxReturnCollateral :: CardanoEra era
-                           -> Maybe (TxOut CtxTx era)
-                           -> Either ShelleyTxCmdError (TxReturnCollateral CtxTx era)
-validateTxReturnCollateral _ Nothing = return TxReturnCollateralNone
-validateTxReturnCollateral era (Just retColTxOut) = do
-  case totalAndReturnCollateralSupportedInEra era of
-    Just supp -> return $ TxReturnCollateral supp retColTxOut
-    Nothing -> txFeatureMismatchPure era TxFeatureReturnCollateral
-
-
-validateTxValidityLowerBound :: CardanoEra era
-                             -> Maybe SlotNo
-                             -> Either ShelleyTxCmdError  (TxValidityLowerBound era)
-validateTxValidityLowerBound _ Nothing = return TxValidityNoLowerBound
-validateTxValidityLowerBound era (Just slot) =
-    case validityLowerBoundSupportedInEra era of
-      Nothing -> txFeatureMismatchPure era TxFeatureValidityLowerBound
-      Just supported -> return (TxValidityLowerBound supported slot)
-
-
-validateTxValidityUpperBound :: CardanoEra era
-                             -> Maybe SlotNo
-                             -> Either ShelleyTxCmdError (TxValidityUpperBound era)
-validateTxValidityUpperBound era Nothing =
-    case validityNoUpperBoundSupportedInEra era of
-      Nothing -> txFeatureMismatchPure era TxFeatureValidityNoUpperBound
-      Just supported -> return (TxValidityNoUpperBound supported)
-validateTxValidityUpperBound era (Just slot) =
-    case validityUpperBoundSupportedInEra era of
-      Nothing -> txFeatureMismatchPure era TxFeatureValidityUpperBound
-      Just supported -> return (TxValidityUpperBound supported slot)
-
-
-validateTxAuxScripts :: CardanoEra era
-                     -> [ScriptFile]
-                     -> ExceptT ShelleyTxCmdError IO (TxAuxScripts era)
-validateTxAuxScripts _ [] = return TxAuxScriptsNone
-validateTxAuxScripts era files =
-  case auxScriptsSupportedInEra era of
-    Nothing -> txFeatureMismatch era TxFeatureAuxScripts
-    Just supported -> do
-      scripts <- sequence
-        [ do script <- firstExceptT ShelleyTxCmdScriptFileError $
-                         readFileScriptInAnyLang file
-             validateScriptSupportedInEra era script
-        | ScriptFile file <- files ]
-      return $ TxAuxScripts supported scripts
-
-validateRequiredSigners :: CardanoEra era
-                        -> [Hash PaymentKey]
-                        -> Either ShelleyTxCmdError (TxExtraKeyWitnesses era)
-validateRequiredSigners _ [] = return TxExtraKeyWitnessesNone
-validateRequiredSigners era reqSigs =
-  case extraKeyWitnessesSupportedInEra era of
-    Nothing -> txFeatureMismatchPure era TxFeatureExtraKeyWits
-    Just supported -> return $ TxExtraKeyWitnesses supported reqSigs
-
-
-validateTxWithdrawals
-  :: forall era.
-     CardanoEra era
-  -> [(StakeAddress, Lovelace, Maybe (ScriptWitness WitCtxStake era))]
-  -> Either ShelleyTxCmdError (TxWithdrawals BuildTx era)
-validateTxWithdrawals _ [] = return TxWithdrawalsNone
-validateTxWithdrawals era withdrawals =
-  case withdrawalsSupportedInEra era of
-    Nothing -> txFeatureMismatchPure era TxFeatureWithdrawals
-    Just supported -> do
-      let convWithdrawals =map convert withdrawals
-      return (TxWithdrawals supported convWithdrawals)
- where
-  convert
-    :: (StakeAddress, Lovelace, Maybe (ScriptWitness WitCtxStake era))
-    -> (StakeAddress, Lovelace, BuildTxWith BuildTx (Witness WitCtxStake era))
-  convert (sAddr, ll, mScriptWitnessFiles) =
-    case mScriptWitnessFiles of
-      Just sWit -> do
-        (sAddr, ll, BuildTxWith $ ScriptWitness ScriptWitnessForStakeAddr sWit)
-      Nothing -> (sAddr,ll, BuildTxWith $ KeyWitness KeyWitnessForStakeAddr)
-
-validateTxCertificates
-  :: forall era.
-     CardanoEra era
-  -> [(Certificate, Maybe (ScriptWitness WitCtxStake era))]
-  -> Either ShelleyTxCmdError (TxCertificates BuildTx era)
-validateTxCertificates _ [] = return TxCertificatesNone
-validateTxCertificates era certsAndScriptWitnesses =
-  case certificatesSupportedInEra era of
-    Nothing -> txFeatureMismatchPure era TxFeatureCertificates
-    Just supported -> do
-      let certs = map fst certsAndScriptWitnesses
-          reqWits = Map.fromList . catMaybes $ map convert certsAndScriptWitnesses
-      return $ TxCertificates supported certs $ BuildTxWith reqWits
-  where
-   -- We get the stake credential witness for a certificate that requires it.
-   -- NB: Only stake address deregistration and delegation requires
-   -- witnessing (witness can be script or key)
-   deriveStakeCredentialWitness
-     :: Certificate
-     -> Maybe StakeCredential
-   deriveStakeCredentialWitness cert = do
-     case cert of
-       StakeAddressDeregistrationCertificate sCred -> Just sCred
-       StakeAddressDelegationCertificate sCred _ -> Just sCred
-       _ -> Nothing
-
-   convert
-     :: (Certificate, Maybe (ScriptWitness WitCtxStake era))
-     -> Maybe (StakeCredential, Witness WitCtxStake era)
-   convert (cert, mScriptWitnessFiles) = do
-     sCred <- deriveStakeCredentialWitness cert
-     case mScriptWitnessFiles of
-       Just sWit -> do
-         Just ( sCred
-              , ScriptWitness ScriptWitnessForStakeAddr sWit
-              )
-       Nothing -> Just (sCred, KeyWitness KeyWitnessForStakeAddr)
-
-validateProtocolParameters
-  :: CardanoEra era
-  -> Maybe ProtocolParameters
-  -> Either ShelleyTxCmdError (BuildTxWith BuildTx (Maybe ProtocolParameters))
-validateProtocolParameters _ Nothing = return (BuildTxWith Nothing)
-validateProtocolParameters era (Just pparams) =
-    case scriptDataSupportedInEra era of
-      Nothing -> txFeatureMismatchPure era TxFeatureProtocolParameters
-      Just _  -> return . BuildTxWith $ Just pparams
-
-validateTxUpdateProposal :: CardanoEra era
-                         -> Maybe UpdateProposal
-                         -> Either ShelleyTxCmdError (TxUpdateProposal era)
-validateTxUpdateProposal _ Nothing = return TxUpdateProposalNone
-validateTxUpdateProposal era (Just prop) =
-    case updateProposalSupportedInEra era of
-      Nothing -> txFeatureMismatchPure era TxFeatureCertificates
-      Just supported -> return $ TxUpdateProposal supported prop
-
-validateTxScriptValidity :: forall era.
-     CardanoEra era
-  -> Maybe ScriptValidity
-  -> Either ShelleyTxCmdError (TxScriptValidity era)
-validateTxScriptValidity _ Nothing = pure TxScriptValidityNone
-validateTxScriptValidity era (Just scriptValidity) =
-  case txScriptValiditySupportedInCardanoEra era of
-    Nothing -> txFeatureMismatchPure era TxFeatureScriptValidity
-    Just supported -> pure $ TxScriptValidity supported scriptValidity
 
 -- TODO: Currently we specify the policyId with the '--mint' option on the cli
 -- and we added a separate '--policy-id' parser that parses the policy id for the
@@ -1476,15 +1327,3 @@ onlyInShelleyBasedEras notImplMsg (InAnyCardanoEra era x) =
       ShelleyBasedEra era' -> return (InAnyShelleyBasedEra era' x)
 
 
--- ----------------------------------------------------------------------------
--- Reading other files
---
-
-validateScriptSupportedInEra :: CardanoEra era
-                             -> ScriptInAnyLang
-                             -> ExceptT ShelleyTxCmdError IO (ScriptInEra era)
-validateScriptSupportedInEra era script@(ScriptInAnyLang lang _) =
-    case toScriptInEra era script of
-      Nothing -> left $ ShelleyTxCmdScriptLanguageNotSupportedInEra
-                          (AnyScriptLanguage lang) (anyCardanoEra era)
-      Just script' -> pure script'
