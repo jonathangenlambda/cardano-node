@@ -205,20 +205,38 @@ span[data-tooltip] {
   max-width: 200px;
 }
 
+.rt-view-logs-live-view-msg-timestamp {
+  font-size: 90%;
+}
+
+.rt-view-logs-live-view-msg-node {
+  font-size: 90%;
+}
+
 .rt-view-logs-live-view-node {
-  width: 10%;
-}
-
-.rt-view-logs-live-view-timestamp {
-  width: 15%;
-}
-
-.rt-view-logs-live-view-severity {
   width: 9%;
 }
 
+.rt-view-logs-live-view-timestamp {
+  width: 14%;
+}
+
+.rt-view-logs-live-view-severity {
+  width: 8%;
+}
+
 .rt-view-logs-live-view-namespace {
-  width: 20%;
+  width: 14%;
+}
+
+.rt-view-logs-live-view-msg-namespace {
+  color: #bcbcbc;
+  font-size: 90%;
+}
+
+.rt-view-logs-live-view-msg-body {
+  color: #fff;
+  font-size: 90%;
 }
 
 .rt-view-errors-timestamp {

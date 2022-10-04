@@ -22,6 +22,48 @@ mkLogsLiveView = do
   searchMessages <- UI.button #. "button is-info"
                               #+ [image "rt-view-search-logs-icon" searchSVG]
 
+  whenToSearch <-
+    UI.div #. "dropdown is-hoverable" #+
+      [ UI.div #. "dropdown-trigger" #+
+          [ UI.button #. "button"
+                      # set ariaHasPopup "true"
+                      # set ariaControls "dropdown-menu4" #+
+              [ UI.span # set text "Last 3 days"
+              -- ICON?
+              ]
+          ]
+      , UI.div ## "dropdown-menu4"
+               #. "dropdown-menu"
+               # set role "menu" #+
+          [ UI.div #. "dropdown-content" #+
+              [ UI.div #. "dropdown-item" #+
+                  [ UI.p # set text "TEST ME"
+                  ]
+              ]
+          ]
+      ]
+
+  whereToSearch <-
+    UI.div #. "dropdown is-hoverable" #+
+      [ UI.div #. "dropdown-trigger" #+
+          [ UI.button #. "button"
+                      # set ariaHasPopup "true"
+                      # set ariaControls "dropdown-menu4" #+
+              [ UI.span # set text "In message"
+              -- ICON?
+              ]
+          ]
+      , UI.div ## "dropdown-menu4"
+               #. "dropdown-menu"
+               # set role "menu" #+
+          [ UI.div #. "dropdown-content" #+
+              [ UI.div #. "dropdown-item" #+
+                  [ UI.p # set text "TEST ME"
+                  ]
+              ]
+          ]
+      ]
+
   logsLiveViewTable <-
     UI.div ## "logs-live-view-modal-window" #. "modal" # set dataState "closed" #+
       [ UI.div #. "modal-background" #+ []
@@ -37,14 +79,18 @@ mkLogsLiveView = do
                   [ UI.div ## "logs-live-view-nodes-checkboxes" #. "field" #+ []
                   ]
               , UI.div ## "logs-live-view-table-container" #. "table-container" #+
-                  [ UI.table ## "logs-live-view-table" #. "table is-fullwidth rt-view-logs-live-view-table" #+
-                      [ UI.mkElement "thead" #+
+                  [ UI.div ## "node-logs-live-view-tbody"
+                           # set dataState "0"
+                           #+ []
+                    {-
+                    UI.table ## "logs-live-view-table" #. "table is-fullwidth rt-view-logs-live-view-table" #+
+                      [ UI.mkElement "thead" # hideIt #+
                           [ UI.tr #+
-                              [ UI.th #. "rt-view-logs-live-view-node" #+
-                                  [ string "Node"
-                                  ]
-                              , UI.th #. "rt-view-logs-live-view-timestamp" #+
+                              [ UI.th #. "rt-view-logs-live-view-timestamp" #+
                                   [ string "Timestamp"
+                                  ]
+                              , UI.th #. "rt-view-logs-live-view-node" #+
+                                  [ string "Node"
                                   ]
                               , UI.th #. "rt-view-logs-live-view-severity" #+
                                   [ string "Severity"
@@ -64,6 +110,7 @@ mkLogsLiveView = do
                                              # set dataState "0"
                                              #+ []
                       ]
+                    -}
                   ]
               ]
           , UI.mkElement "footer" #. "modal-card-foot rt-view-logs-live-view-foot" #+
@@ -71,48 +118,10 @@ mkLogsLiveView = do
                   [ UI.div #. "column" #+
                       [ UI.div #. "field has-addons" #+
                           [ UI.p #. "control" #+
-                              [ UI.div #. "dropdown is-hoverable" #+
-                                  [ UI.anchor #. "navbar-link" #+ [element notificationsIcon]
-                                  , UI.div #. "navbar-dropdown is-right" #+
-                                      [ element notificationsEventsItem
-                                      , element notificationsSettingsItem
-                                      ]
-                                  ]
-
-
-
-
-
-                                <div class="dropdown is-hoverable">
-                                  <div class="dropdown-trigger">
-                                    <button class="button" aria-haspopup="true" aria-controls="dropdown-menu4">
-                                      <span>Hover me</span>
-                                      <span class="icon is-small">
-                                        <i class="fas fa-angle-down" aria-hidden="true"></i>
-                                      </span>
-                                    </button>
-                                  </div>
-                                  <div class="dropdown-menu" id="dropdown-menu4" role="menu">
-                                    <div class="dropdown-content">
-                                      <div class="dropdown-item">
-                                        <p>You can insert <strong>any type of content</strong> within the dropdown menu.</p>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-
-
-
-
-
-
-
-
-
-
-
-
-
+                              [ element whenToSearch
+                              ]
+                          , UI.p #. "control" #+
+                              [ element whereToSearch
                               ]
                           , UI.p #. "control" #+
                               [ element searchMessagesInput

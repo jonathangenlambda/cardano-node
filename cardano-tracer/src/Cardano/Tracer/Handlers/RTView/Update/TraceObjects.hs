@@ -95,8 +95,10 @@ doAddItemRow nodeId@(NodeId anId) nodeName nodeColor
 
     nodeNameLabel <-
       case nodeColor of
-        Nothing -> UI.span # set text nodeNamePrepared
-        Just (Color code) -> UI.span # set style [("color", code)]
+        Nothing -> UI.span #. "rt-view-logs-live-view-msg-node"
+                           # set text nodeNamePrepared
+        Just (Color code) -> UI.span #. "rt-view-logs-live-view-msg-node"
+                                     # set style [("color", code)]
                                      # set text nodeNamePrepared
 
     logItemRowId <-
@@ -105,12 +107,16 @@ doAddItemRow nodeId@(NodeId anId) nodeName nodeColor
         Just currentNumber -> return $ T.unpack nodeName <> "llv" <> show currentNumber
 
     return $
+      UI.p #. "" #+
+        [ .
+        ]
+      {-
       UI.tr ## logItemRowId #. (T.unpack anId <> "-node-logs-live-view-row") #+
         [ UI.td #+
-            [ element nodeNameLabel
+            [ UI.span #. "rt-view-logs-live-view-msg-timestamp" # set text (preparedTS ts)
             ]
         , UI.td #+
-            [ UI.span # set text (preparedTS ts)
+            [ element nodeNameLabel
             ]
         , UI.td #+
             [ let sevClass =
@@ -123,24 +129,15 @@ doAddItemRow nodeId@(NodeId anId) nodeName nodeColor
               in UI.span #. ("tag is-medium is-rounded " <> sevClass) # set text (show sev)
             ]
         , UI.td #+
-            [ UI.p #. "control" #+
-                [ UI.input #. "input rt-view-error-msg-input"
-                           # set UI.type_ "text"
-                           # set (UI.attr "readonly") "readonly"
-                           # set UI.value (T.unpack ns)
-                ]
+            [ UI.span #. "rt-view-logs-live-view-msg-namespace" # set text (T.unpack ns)
             ]
         , UI.td #+
-            [ UI.p #. "control" #+
-                [ UI.input #. "input rt-view-error-msg-input"
-                           # set UI.type_ "text"
-                           # set (UI.attr "readonly") "readonly"
-                           # set UI.value (T.unpack msg)
-                ]
+            [ UI.span #. "rt-view-logs-live-view-msg-body" # set text (T.unpack msg)
             ]
         , UI.td #+
             [ element copyItemIcon
             ]
         ]
+      -}
 
   preparedTS = formatTime defaultTimeLocale "%D %T"

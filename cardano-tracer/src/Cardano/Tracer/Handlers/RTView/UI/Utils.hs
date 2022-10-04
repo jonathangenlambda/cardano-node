@@ -5,6 +5,8 @@
 
 module Cardano.Tracer.Handlers.RTView.UI.Utils
   ( (##)
+  , ariaControls
+  , ariaHasPopup
   , dataAction
   , dataParent
   , dataState
@@ -33,6 +35,7 @@ module Cardano.Tracer.Handlers.RTView.UI.Utils
   , visibleOnly
   , pageTitle
   , pageTitleNotify
+  , role
   , shortenName
   , shortenPath
   , setDisplayedValue
@@ -206,6 +209,12 @@ pageTitle, pageTitleNotify :: String
 pageTitle       = "Cardano RTView"
 pageTitleNotify = "(!) Cardano RTView"
 
+ariaHasPopup :: WriteAttr Element String
+ariaHasPopup = mkWriteAttr $ set' (attr "aria-haspopup")
+
+ariaControls :: WriteAttr Element String
+ariaControls = mkWriteAttr $ set' (attr "aria-controls")
+
 dataTooltip :: WriteAttr Element String
 dataTooltip = mkWriteAttr $ set' (attr "data-tooltip")
 
@@ -223,6 +232,9 @@ dataAttr name = mkReadWriteAttr getData setData
  where
   getData   el = callFunction $ ffi "$(%1).data(%2)" el name
   setData v el = runFunction  $ ffi "$(%1).data(%2,%3)" el name v
+
+role :: WriteAttr Element String
+role = mkWriteAttr $ set' (attr "role")
 
 image :: String -> String -> UI Element
 image imgClass svg = UI.span #. imgClass # set html svg
