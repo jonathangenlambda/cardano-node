@@ -101,43 +101,28 @@ doAddItemRow nodeId@(NodeId anId) nodeName nodeColor
                                      # set style [("color", code)]
                                      # set text nodeNamePrepared
 
+    let sevClass =
+          case sev of
+            Debug   -> "has-text-primary"
+            Info    -> "has-text-link"
+            Notice  -> "has-text-info"
+            Warning -> "has-text-warning"
+            _       -> "has-text-danger"
+    severity <- UI.span #. ("rt-view-logs-live-view-msg-severity " <> sevClass) # set text (show sev)
+
     logItemRowId <-
       liftIO (getLogsLiveViewCounter llvCounters nodeId) >>= \case
         Nothing -> return $ T.unpack nodeName <> "llv0"
         Just currentNumber -> return $ T.unpack nodeName <> "llv" <> show currentNumber
 
     return $
-      UI.p #. "" #+
-        [ .
+      UI.p ## logItemRowId #. (T.unpack anId <> "-node-logs-live-view-row") #+
+        [ UI.span #. "rt-view-logs-live-view-msg-timestamp" # set text (preparedTS ts)
+        , element nodeNameLabel
+        , element severity
+        , UI.span #. "rt-view-logs-live-view-msg-namespace" # set text ("[" <> T.unpack ns <> "]")
+        , UI.span #. "rt-view-logs-live-view-msg-body" # set text (T.unpack msg)
+        -- , element copyItemIcon
         ]
-      {-
-      UI.tr ## logItemRowId #. (T.unpack anId <> "-node-logs-live-view-row") #+
-        [ UI.td #+
-            [ UI.span #. "rt-view-logs-live-view-msg-timestamp" # set text (preparedTS ts)
-            ]
-        , UI.td #+
-            [ element nodeNameLabel
-            ]
-        , UI.td #+
-            [ let sevClass =
-                    case sev of
-                      Debug   -> "is-primary"
-                      Info    -> "is-link"
-                      Notice  -> "is-info"
-                      Warning -> "is-warning"
-                      _       -> "is-danger"
-              in UI.span #. ("tag is-medium is-rounded " <> sevClass) # set text (show sev)
-            ]
-        , UI.td #+
-            [ UI.span #. "rt-view-logs-live-view-msg-namespace" # set text (T.unpack ns)
-            ]
-        , UI.td #+
-            [ UI.span #. "rt-view-logs-live-view-msg-body" # set text (T.unpack msg)
-            ]
-        , UI.td #+
-            [ element copyItemIcon
-            ]
-        ]
-      -}
 
   preparedTS = formatTime defaultTimeLocale "%D %T"

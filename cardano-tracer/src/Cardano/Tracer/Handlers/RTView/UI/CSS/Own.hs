@@ -205,12 +205,36 @@ span[data-tooltip] {
   max-width: 200px;
 }
 
+.rt-view-logs-live-view-tbody {
+  font-family: monospace;
+  font-size: 90%;
+  padding-top: 18px;
+}
+
 .rt-view-logs-live-view-msg-timestamp {
   font-size: 90%;
+  padding-right: 15px;
+  color: #888;
 }
 
 .rt-view-logs-live-view-msg-node {
   font-size: 90%;
+  padding-right: 15px;
+}
+
+.rt-view-logs-live-view-msg-severity {
+  font-weight: bold;
+  background-color: #2b2929;
+  margin-right: 15px;
+}
+
+.rt-view-logs-live-view-msg-namespace {
+  color: #bcbcbc;
+  padding-right: 15px;
+}
+
+.rt-view-logs-live-view-msg-body {
+  color: #fff;
 }
 
 .rt-view-logs-live-view-node {
@@ -227,16 +251,6 @@ span[data-tooltip] {
 
 .rt-view-logs-live-view-namespace {
   width: 14%;
-}
-
-.rt-view-logs-live-view-msg-namespace {
-  color: #bcbcbc;
-  font-size: 90%;
-}
-
-.rt-view-logs-live-view-msg-body {
-  color: #fff;
-  font-size: 90%;
 }
 
 .rt-view-errors-timestamp {

@@ -80,37 +80,9 @@ mkLogsLiveView = do
                   ]
               , UI.div ## "logs-live-view-table-container" #. "table-container" #+
                   [ UI.div ## "node-logs-live-view-tbody"
+                           #. "rt-view-logs-live-view-tbody"
                            # set dataState "0"
                            #+ []
-                    {-
-                    UI.table ## "logs-live-view-table" #. "table is-fullwidth rt-view-logs-live-view-table" #+
-                      [ UI.mkElement "thead" # hideIt #+
-                          [ UI.tr #+
-                              [ UI.th #. "rt-view-logs-live-view-timestamp" #+
-                                  [ string "Timestamp"
-                                  ]
-                              , UI.th #. "rt-view-logs-live-view-node" #+
-                                  [ string "Node"
-                                  ]
-                              , UI.th #. "rt-view-logs-live-view-severity" #+
-                                  [ string "Severity"
-                                  ]
-                              , UI.th #. "rt-view-logs-live-view-namespace" #+
-                                  [ string "Namespace"
-                                  ]
-                              , UI.th #+
-                                  [ string "Message"
-                                  ]
-                              , UI.th #. "rt-view-logs-live-view-copies" #+
-                                  [ UI.span # set html "&nbsp;"
-                                  ]
-                              ]
-                          ]
-                      , UI.mkElement "tbody" ## "node-logs-live-view-tbody"
-                                             # set dataState "0"
-                                             #+ []
-                      ]
-                    -}
                   ]
               ]
           , UI.mkElement "footer" #. "modal-card-foot rt-view-logs-live-view-foot" #+
