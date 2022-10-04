@@ -4,7 +4,11 @@
 
 ### Features
 
-- Append, not prepend change output when balancing a transaction ([PR 4343](https://github.com/input-output-hk/cardano-node/pull/4343))
+
+## 1.35.4 -- October 2022
+
+- Expose `Key` interface via `Cardano.Api.Shelley` ([PR4048](https://github.com/input-output-hk/cardano-node/pull/4048))
+- Append, not prepend change output when balancing a transaction ([PR4343](https://github.com/input-output-hk/cardano-node/pull/4343))
 
 - Expose convenience functions `executeQueryCardanoMode`, `determineEra`, `constructBalancedTx` and `queryStateForBalancedTx` ([PR 4446](https://github.com/input-output-hk/cardano-node/pull/4446))
 

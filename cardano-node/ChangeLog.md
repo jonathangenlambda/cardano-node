@@ -1,5 +1,27 @@
 # Changelog for cardano-node
 
+## 1.35.4 -- October 2022
+
+### plutus changes
+
+- enables SECP primitive for plutus smart contracts at protocol version 8 (intra-era hard fork)
+
+### node changes
+
+None
+
+### consensus changes
+
+None
+
+### network changes
+
+None
+
+### ledger changes
+
+None
+
 ## 1.35.3 -- August 2022
 
 ### node changes
