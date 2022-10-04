@@ -18,18 +18,12 @@ in rec {
           enable = config.actionRun.facts != {};
           repo = "input-output-hk/cardano-node";
           sha = config.preset.github-ci.lib.getRevision ciInputName null;
-          clone = false;
         };
       };
     };
 
     mkHydraJobTask = flakeOutputTask: {...}: {
       imports = [common flakeOutputTask];
-
-      flakeOutputTask.flakeUrl = lib.mkIf (config.actionRun.facts != {}) (
-        with config.preset.github-ci;
-        "github:${repo}/${sha}"
-      );
 
       # some hydra jobs run NixOS tests
       env.NIX_CONFIG = ''
