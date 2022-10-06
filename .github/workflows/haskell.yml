@@ -54,6 +54,11 @@ jobs:
           mingw-w64-x86_64-cmake
           mingw-w64-x86_64-jq
 
+    - name: "WIN: Setup pkg-config"
+      if: runner.os == 'Windows'
+      run: |
+        pacman --noconfirm -S mingw-w64-x86_64-pkg-config
+
     - name: "LINUX,MAC: Setup haskell"
       if: runner.os != 'Windows'
       uses: haskell/actions/setup@v1
