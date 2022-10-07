@@ -45,6 +45,7 @@ module Cardano.Api.IPC (
     -- *** Local tx submission
     LocalTxSubmissionClient(..),
     TxInMode(..),
+    TxIdInMode(..),
     TxValidationErrorInMode(..),
     TxValidationError,
     submitTxToNodeLocal,
@@ -657,6 +658,9 @@ data LocalTxMonitoringResult mode
   | LocalTxMonitoringNextTx
       (Maybe (TxInMode mode))
       SlotNo -- ^ Slot number at which the mempool snapshot was taken
+  | LocalTxMonitoringAllTx
+      [TxInMode mode]
+      SlotNo -- ^ Slot number at which the mempool snapshot was taken
   | LocalTxMonitoringMempoolSizeAndCapacity
       Consensus.MempoolSizeAndCapacity
       SlotNo -- ^ Slot number at which the mempool snapshot was taken
@@ -671,6 +675,8 @@ data LocalTxMonitoringQuery mode
   -- current list. This must be a transaction that was not previously sent to
   -- the client for this particular snapshot.
   | LocalTxMonitoringSendNextTx
+  -- | Query all txs in the mempool
+  | LocalTxMonitoringQueryAll
   -- | Ask the server about the current mempool's capacity and sizes. This is
   -- fixed in a given snapshot.
   | LocalTxMonitoringMempoolInformation
@@ -688,6 +694,8 @@ queryTxMonitoringLocal connectInfo localTxMonitoringQuery = do
                    localTxMonitorClientTxExists txidInMode resultVar
                  LocalTxMonitoringSendNextTx ->
                    localTxMonitorNextTx resultVar
+                 LocalTxMonitoringQueryAll ->
+                   localTxMonitorQueryAll resultVar
                  LocalTxMonitoringMempoolInformation ->
                    localTxMonitorMempoolInfo resultVar
 
@@ -723,6 +731,26 @@ queryTxMonitoringLocal connectInfo localTxMonitoringQuery = do
         return $ CTxMon.SendMsgNextTx $ \mTx -> do
           atomically $ putTMVar resultVar $ LocalTxMonitoringNextTx mTx slt
           return $ CTxMon.SendMsgRelease $ return $ CTxMon.SendMsgDone ()
+
+  localTxMonitorQueryAll
+    :: TMVar (LocalTxMonitoringResult mode)
+    -> LocalTxMonitorClient (TxIdInMode mode) (TxInMode mode) SlotNo IO ()
+  localTxMonitorQueryAll resultVar =
+    LocalTxMonitorClient $ return $ do
+      CTxMon.SendMsgAcquire $ \slt -> do
+        return $ fetchNextTx [] slt
+    where
+      fetchNextTx 
+        :: [TxInMode mode] 
+        -> SlotNo 
+        -> CTxMon.ClientStAcquired txid (TxInMode mode) SlotNo IO ()
+      fetchNextTx acc slt = CTxMon.SendMsgNextTx $ \mTx -> do
+        case mTx of
+          Nothing -> do
+            -- reversing because prepending
+            atomically . putTMVar resultVar $ LocalTxMonitoringAllTx (reverse acc) slt
+            return $ CTxMon.SendMsgRelease $ return $ CTxMon.SendMsgDone ()
+          Just tx -> return $ fetchNextTx (tx:acc) slt
 
   localTxMonitorMempoolInfo
     :: TMVar (LocalTxMonitoringResult mode)
